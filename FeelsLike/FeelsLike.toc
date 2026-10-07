@@ -1,0 +1,18 @@
+## Interface: 120100, 120105, 16001
+## Title: Feels Like
+## Notes: A tiny temperature gauge. Shows how hot or cold your character feels.
+## Author: fau2
+## Version: 0.1.0
+## Category: Roleplay
+## IconTexture: Interface\AddOns\FeelsLike\Media\Icon
+## SavedVariables: FeelsLikeDB
+
+Model.lua
+Data\Zones.lua
+Data\Instances.lua
+Sensors.lua
+DialVector.lua
+DialLines.lua
+Gauge.lua
+Options.lua
+Core.lua

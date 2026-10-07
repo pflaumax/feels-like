@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LuaJIT
+        run: sudo apt-get update && sudo apt-get install -y luajit
+
+      - name: Check tag matches .toc version
+        run: |
+          toc_version=$(sed -n 's/^## Version: *//p' FeelsLike/FeelsLike.toc | tr -d '\r')
+          if [ "v$toc_version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match ## Version: $toc_version in FeelsLike.toc" >&2
+            exit 1
+          fi
+
+      - name: Build zip (runs tests)
+        run: |
+          sh tools/package.sh
+          cp dist/FeelsLike-*.zip dist/FeelsLike.zip
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/FeelsLike.zip dist/FeelsLike-*.zip \
+            --title "Feels Like $GITHUB_REF_NAME" \
+            --generate-notes
