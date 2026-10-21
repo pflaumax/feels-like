@@ -28,8 +28,11 @@ local SWEEP_DELAY = 1.5
 -- A test value gives the gauge back to real readings by itself, so it never stays stuck.
 local TEST_TIMEOUT = 30
 
+local MAX_AURAS = 255 -- /feels auras lists at most this many buffs
+
 local wetness = 0
 local lastState, lastResult
+local lastUpdate -- GetTime() of the last Update
 -- While a test is active, real readings do not move the gauge.
 local test
 -- Bumped by every test command and by StopTest; pending sweeps and timeouts of older runs do nothing.
@@ -49,12 +52,17 @@ local function InitDB()
 	return FeelsLikeDB
 end
 
-local function Update(dt)
+local function Update()
+	-- Clothes dried or soaked over the real time since the last update, in the conditions of that time.
+	-- A loading screen delays updates, and that time counts where you were, not where you arrive.
+	local now = GetTime()
+	if lastState then
+		wetness = ns.Model.UpdateWetness(wetness, now - lastUpdate, lastState, lastResult.dry + lastResult.burn)
+	end
+	lastUpdate = now
+
 	local state = ns.Sensors.Read()
 	local result = ns.Model.Compute(state, wetness)
-	if dt > 0 then
-		wetness = ns.Model.UpdateWetness(wetness, dt, state, result.dry + result.burn)
-	end
 	lastState, lastResult = state, result
 	if not test then
 		ns.Gauge:SetTarget(result.target)
@@ -71,7 +79,7 @@ end
 local function StopTest()
 	test = nil
 	testRun = testRun + 1
-	Update(0)
+	Update()
 end
 
 -- Starts a held test value that ends by itself after TEST_TIMEOUT seconds.
@@ -108,7 +116,7 @@ end
 
 local function PrintDebug()
 	if not lastState then
-		Update(0)
+		Update()
 	end
 	local s, r = lastState, lastResult
 	local band = ns.Model.Band(r.target, r.cozy)
@@ -128,8 +136,10 @@ local function PrintDebug()
 			s.weather or "clear", s.weatherIntensity, Signed(r.weather),
 			tostring(info and info.type), tostring(info and info.intensity)))
 	end
-	local shelter = s.inInstance and "instance, no shelter" or s.shelter
-	if not s.inInstance and s.rawShelter ~= s.shelter then
+	local ownShelter = ns.Model.HasOwnShelter(s)
+	local shelter = ownShelter and (s.inInstance and "instance" or "inside as a whole") .. ", no shelter"
+		or s.shelter
+	if not ownShelter and s.rawShelter ~= s.shelter then
 		shelter = shelter .. " (" .. s.rawShelter .. " in a moment)"
 	end
 	print(string.format("  env %s, %s: %s", Signed(r.env), shelter, Signed(r.sheltered)))
@@ -155,14 +165,16 @@ end
 -- Lists the player's buffs, to find which aura a campfire gives.
 local function PrintAuras()
 	Print("your buffs")
-	for i = 1, 40 do
-		local aura = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
-		if issecretvalue and issecretvalue(aura) then
+	local IsSecret = ns.Sensors.IsSecret
+	-- Modern clients allow more than 40 buffs; the cap only guards against a list that never ends.
+	for index = 1, MAX_AURAS do
+		local aura = C_UnitAuras.GetAuraDataByIndex("player", index, "HELPFUL")
+		if IsSecret(aura) or (aura ~= nil and (IsSecret(aura.name) or IsSecret(aura.spellId))) then
 			print("  hidden while auras are restricted (combat)")
 			return
 		end
 		if not aura then
-			if i == 1 then
+			if index == 1 then
 				print("  none")
 			end
 			return
@@ -181,6 +193,7 @@ local function PrintUsage()
 	print("  /feels test sweep - move the needle across the whole scale")
 	print("  /feels test cozy - toggle the Cozy word for 30 s")
 	print("  /feels test off - back to real readings")
+	print("  /feels measure <frame> - where a frame sits by the minimap, and the gauge scale of its size")
 end
 
 local function Test(arg)
@@ -204,8 +217,22 @@ end
 
 SLASH_FEELSLIKE1 = "/feels"
 SLASH_FEELSLIKE2 = "/feelslike"
+-- Prints where a frame (by its global name, as /fstack shows it) sits by the minimap.
+local function Measure(name)
+	local target = name and _G[name]
+	if type(target) ~= "table" or type(target.GetCenter) ~= "function" then
+		Print("no frame named " .. tostring(name) .. ". Hover it with /fstack to see its name.")
+		return
+	end
+	Print(name .. ": " .. ns.Gauge:Describe(target))
+	Print("gauge: " .. ns.Gauge:DescribePosition())
+end
+
 SlashCmdList.FEELSLIKE = function(input)
-	local command, arg = strsplit(" ", strtrim(input or ""):lower(), 2)
+	-- Frame names are case-sensitive, so only the command is lowercased here.
+	local command, arg = strsplit(" ", strtrim(input or ""), 2)
+	command = command:lower()
+	arg = arg and strtrim(arg)
 	if command == "" then
 		if InCombatLockdown() then
 			Print("settings open after combat.")
@@ -217,7 +244,9 @@ SlashCmdList.FEELSLIKE = function(input)
 	elseif command == "auras" then
 		PrintAuras()
 	elseif command == "test" then
-		Test(arg)
+		Test(arg and arg:lower())
+	elseif command == "measure" then
+		Measure(arg)
 	else
 		PrintUsage()
 	end
@@ -248,7 +277,7 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 				-- A fire mob's first hit can arrive before the combat flag; look again next frame.
 				C_Timer.After(0, function()
 					if ns.Sensors.AcceptFireHit() then
-						Update(0)
+						Update()
 					end
 				end)
 			end
@@ -261,13 +290,14 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 			ns.Sensors.OnCombatEnded()
 			return
 		elseif event == "PLAYER_ENTERING_WORLD" then
-			ns.Sensors.ResetShelter()
+			local isInitialLogin, isReloadingUi = ...
+			ns.Sensors.OnLoadingScreen(not (isInitialLogin or isReloadingUi))
 		end
-		Update(0)
+		Update()
 	end)
 
 	C_Timer.NewTicker(TICK, function()
-		Update(TICK)
+		Update()
 	end)
-	Update(0)
+	Update()
 end)

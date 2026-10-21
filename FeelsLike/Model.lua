@@ -211,24 +211,40 @@ function Model.SettleShelter(memory, raw, now)
 	return memory.current
 end
 
+-- Instances and places that are inside as a whole: their value is already how it feels in there.
+local function HasOwnShelter(state)
+	return state.inInstance or state.inside
+end
+Model.HasOwnShelter = HasOwnShelter
+
+-- An inn counts only where shelter applies.
+local function InInn(state)
+	return state.inn and not HasOwnShelter(state)
+end
+
 function Model.DayNight(hour, climate)
 	local swing = Model.CLIMATE_SWING[climate] or 0
 	return swing * math.cos(2 * math.pi * (hour - PEAK_HOUR) / 24)
 end
 
 -- state: base, climate, hour, weather (kind or nil), weatherIntensity (0..1), indoors, inn, inInstance,
--- campfire (0..1, see Model.CampfireNearness), burning (0..1, see Model.Burning).
+-- inside (the place is inside as a whole, see Zones.lua), campfire (0..1, see Model.CampfireNearness),
+-- burning (0..1, see Model.Burning).
 -- wetness: 0..1. Returns every step, so /feels debug can print them.
--- Instance values already describe how the place feels inside, so shelter does not apply there.
+-- Instance values and places that are inside as a whole already describe how the place feels inside,
+-- so shelter and inns do not apply there.
 function Model.Compute(state, wetness)
 	local r = {}
 	r.dayNight = Model.DayNight(state.hour, state.climate)
-	r.weather = state.weather and (Model.WEATHER_DELTA[state.weather] or 0) * state.weatherIntensity or 0
+	-- A place that is inside as a whole has no sky, so weather the game reports there does not reach you.
+	local weather = not state.inside and state.weather
+	r.weather = weather and (Model.WEATHER_DELTA[weather] or 0) * state.weatherIntensity or 0
 	r.env = state.base + r.dayNight + r.weather
 
-	if state.inInstance then
+	local inn = InInn(state)
+	if HasOwnShelter(state) then
 		r.sheltered = r.env
-	elseif state.inn then
+	elseif inn then
 		r.sheltered = INN_ROOM + (r.env - INN_ROOM) * INN_FACTOR
 	elseif state.indoors then
 		r.sheltered = INDOOR_ROOM + (r.env - INDOOR_ROOM) * INDOOR_FACTOR
@@ -237,7 +253,7 @@ function Model.Compute(state, wetness)
 	end
 
 	-- An inn is already warm; a lingering campfire aura must not make it hot.
-	local campfire = state.inn and 0 or (state.campfire or 0)
+	local campfire = inn and 0 or (state.campfire or 0)
 	r.campfire = CAMPFIRE_WARMTH * campfire
 	r.dry = r.sheltered + r.campfire
 	r.wet = -WET_CHILL * wetness
@@ -249,7 +265,7 @@ function Model.Compute(state, wetness)
 
 	local segment = Model.SegmentIndex(r.target)
 	local byFire = (state.campfire or 0) >= 0.5
-	r.cozy = (state.inn or byFire) and segment >= COZY_FIRST_SEGMENT and segment <= COZY_LAST_SEGMENT or false
+	r.cozy = (inn or byFire) and segment >= COZY_FIRST_SEGMENT and segment <= COZY_LAST_SEGMENT or false
 	return r
 end
 
@@ -262,14 +278,14 @@ function Model.UpdateWetness(wetness, dt, state, dryTemperature)
 		return 1
 	end
 
-	local raining = state.weather == "rain" and not state.indoors
+	local raining = state.weather == "rain" and not (state.indoors or state.inside)
 	local floor = raining and RAIN_WETNESS * state.weatherIntensity or 0
 	if wetness < floor then
 		return math.min(floor, wetness + dt / RAIN_SOAK_TIME)
 	end
 
 	local dryTime = NORMAL_DRY_TIME
-	if state.inn or (state.campfire or 0) >= 0.5 then
+	if InInn(state) or (state.campfire or 0) >= 0.5 then
 		dryTime = FIRESIDE_DRY_TIME
 	elseif dryTemperature >= HOT_DRYING then
 		dryTime = HOT_DRY_TIME

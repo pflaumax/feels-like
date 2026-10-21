@@ -224,13 +224,6 @@ local function CoreEvent(event, ...)
 	return false
 end
 
--- Runs the timers that are due (C_Timer.After(0, ...) runs on the next frame).
-local function NextFrame()
-	local pending = timers
-	timers = {}
-	for _, fn in ipairs(pending) do fn() end
-end
-
 -- Fire damage to the player, then the next frame, where Core confirms it outside combat.
 local function FireHit(schoolMask)
 	local delivered = CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 120, schoolMask or 4)
@@ -271,6 +264,15 @@ end
 local unitLayer, ringIcy, faceHot = LayerBySvg("unit_c.svg"), LayerBySvg("ring_icy.svg"), LayerBySvg("face_hot.svg")
 check("needles loaded once, one visible", #VisibleNeedles() == 1, table.concat(VisibleNeedles(), ","))
 check("svg path", vectorLayers[1].svg == "Interface\\AddOns\\FeelsLike\\Media\\face.svg", vectorLayers[1].svg)
+-- Every SVG the dial loads exists on disk, so NEEDLE_STEPS matches the generated needle files.
+for _, layer in ipairs(vectorLayers) do
+	local path = layer.svg:gsub("^Interface\\AddOns\\", ""):gsub("\\", "/")
+	local file = io.open(path)
+	check("svg file exists", file ~= nil, path)
+	if file then
+		file:close()
+	end
+end
 check("defaults saved", FeelsLikeDB.unit == "C" and FeelsLikeDB.label == "hover" and FeelsLikeDB.locked == false and FeelsLikeDB.scale == 0.45)
 check("one ticker", #tickers == 1, #tickers)
 
@@ -322,12 +324,48 @@ check("position angle and distance", ns.Gauge:DescribePosition():find("225 degre
 	ns.Gauge:DescribePosition())
 gaugeForPosition.GetCenter = function() return 500, 300 end
 
--- Default place: below the minimap at 158 degrees, 1.66 radii out, offsets divided by the 0.45 scale.
+-- Forever's default place: on the minimap ring at 327 degrees (mirroring the day/night button),
+-- 1.03 radii out, offsets divided by the 0.45 scale. The ring is bronze, like Forever's minimap.
 local gauge = _G.FeelsLikeGauge
 local point = gauge.point
-local expected = 198 / 2 * 1.66 * math.sin(math.rad(158)) / 0.45
+local expectedX = 198 / 2 * 1.03 * math.sin(math.rad(327)) / 0.45
+local expectedY = 198 / 2 * 1.03 * math.cos(math.rad(327)) / 0.45
 check("anchored to minimap", point and point[2] == _G.Minimap, point and tostring(point[2]))
-check("minimap offset", point and math.abs(point[4] - expected) < 0.01, point and point[4])
+check("minimap offset", point and math.abs(point[4] - expectedX) < 0.01 and math.abs(point[5] - expectedY) < 0.01,
+	point and (point[4] .. ", " .. point[5]))
+check("bronze ring in forever", LayerBySvg("ring_bronze.svg") ~= nil and LayerBySvg("ring_gold.svg") == nil)
+
+-- The word sits on the side away from the minimap (the minimap is 198 wide, its center at 500, 300).
+local wordLabel = fontStrings.GameFontHighlightSmall
+local function LabelSideAt(x, y)
+	gauge.GetCenter = function() return x, y end
+	ns.Gauge:ApplyPosition()
+	return wordLabel.point[1]
+end
+check("word left of a gauge at the upper left", LabelSideAt(440, 390) == "RIGHT", wordLabel.point[1])
+check("word right of a gauge at the right", LabelSideAt(600, 300) == "LEFT", wordLabel.point[1])
+check("word above a gauge over the minimap", LabelSideAt(490, 410) == "BOTTOM", wordLabel.point[1])
+check("word below a gauge under the minimap", LabelSideAt(510, 190) == "TOP", wordLabel.point[1])
+check("word below a gauge far away", LabelSideAt(100, 900) == "TOP", wordLabel.point[1])
+-- The minimap moves after the gauge was placed (another addon): the word follows when it shows.
+gauge.GetCenter = function() return 440, 390 end
+ns.Gauge:ApplyPosition()
+_G.Minimap.GetCenter = function() return 300, 390 end
+gauge.scripts.OnEnter()
+check("word side follows a moved minimap", wordLabel.point[1] == "LEFT", wordLabel.point[1])
+gauge.scripts.OnLeave()
+_G.Minimap.GetCenter = function() return 500, 300 end
+gauge.GetCenter = function() return 500, 300 end
+ns.Gauge:ApplyPosition()
+
+-- /feels measure: where a minimap button sits, by its case-sensitive frame name.
+_G.MoonButton = Widget()
+_G.MoonButton.GetCenter = function() return 554, 383 end -- 33 degrees, 1.00 radius
+_G.MoonButton.GetWidth = function() return 36 end
+local measured = Slash("measure MoonButton")
+check("measure a frame", measured:find("MoonButton: 33 degrees from 12 o'clock, 1.00 of the minimap radius from its center, as wide as the gauge at scale 0.50", 1, true), measured)
+check("measure an unknown frame", Slash("measure NoSuchFrame"):find("no frame named NoSuchFrame", 1, true))
+_G.MoonButton = nil
 
 -- The word: hidden until hover, then the current band word.
 local label = fontStrings.GameFontHighlightSmall
@@ -338,11 +376,9 @@ check("label on hover", label.shown and label.text == "Freezing", label.text)
 gauge.scripts.OnLeave()
 check("label hidden after hover", label.shown == false)
 settings.FEELSLIKE_LABEL.callback(nil, "always")
-FeelsLikeDB.label = "always"
-ns.Gauge:SetLabelMode("always")
 check("label always", label.shown == true)
-FeelsLikeDB.label = "hover"
-ns.Gauge:SetLabelMode("hover")
+settings.FEELSLIKE_LABEL.callback(nil, "hover")
+check("label back to hover", label.shown == false and FeelsLikeDB.label == "hover")
 
 -- Moving needs Shift and an unlocked gauge.
 gauge.moving = false
@@ -357,7 +393,7 @@ check("drag saves position", FeelsLikeDB.x ~= nil and gauge.point[2] == _G.UIPar
 ns.Gauge:ResetPosition()
 check("reset back to minimap", FeelsLikeDB.x == nil and gauge.point[2] == _G.Minimap)
 gauge.moving = false
-FeelsLikeDB.locked = true
+ns.Gauge:SetLocked(true)
 gauge.scripts.OnDragStart(gauge)
 check("locked does not move", not gauge.moving)
 world.shift = false
@@ -365,6 +401,9 @@ check("mouse on while label shows on hover", gauge.mouse == true)
 FeelsLikeDB.label = "never"
 ns.Gauge:SetLabelMode("never")
 check("locked without label lets clicks through", gauge.mouse == false)
+FeelsLikeDB.label = "always"
+ns.Gauge:SetLabelMode("always")
+check("locked with the word always shown lets clicks through", gauge.mouse == false)
 FeelsLikeDB.locked, FeelsLikeDB.label = false, "hover"
 ns.Gauge:SetLocked(false)
 ns.Gauge:SetLabelMode("hover")
@@ -392,6 +431,10 @@ world.auras[1459] = { spellId = 1459 }
 local aurasText = Slash("auras")
 check("auras lists buffs", aurasText:find("Aura 1459 (1459)", 1, true), aurasText)
 check("auras marks campfire", aurasText:find("Aura 7353 (7353) - counts as campfire", 1, true), aurasText)
+for id = 1, 44 do -- more than 40 buffs: the campfire one is 46th
+	world.auras[id] = { spellId = id }
+end
+check("auras lists past 40", Slash("auras"):find("(7353) - counts as campfire", 1, true))
 world.auras = {}
 check("auras none", Slash("auras"):find("none", 1, true))
 
@@ -430,6 +473,24 @@ check("resting outdoors is not cozy", Gauge.cozy == false)
 world.resting = false
 Tick(3)
 
+-- The Undercity is underground as a whole: indoors and resting everywhere, yet its own value counts,
+-- not an inn.
+world.mapID, world.zoneText = 1458, "Undercity"
+world.indoors, world.resting = true, true
+Tick(3)
+check("undercity keeps its own value", math.abs(Gauge.target - (-20)) < 0.01, Gauge.target)
+check("undercity is not cozy", Gauge.cozy == false)
+debugText = Slash("debug")
+check("debug says inside as a whole", debugText:find("inside as a whole, no shelter", 1, true), debugText)
+-- Out through the city gate into Tirisfal at 15:00 (-15 + 10): the city's reading does not linger
+-- for the shelter delay.
+world.mapID, world.zoneText = 1420, "Tirisfal Glades"
+world.indoors, world.resting = false, false
+Tick(1)
+check("no inn reading after the undercity", Gauge.cozy == false and Gauge.target < 15, Gauge.target)
+Tick(2) -- the usual door delay, then outdoors
+check("outdoors after the undercity", math.abs(Gauge.target - (-5)) < 0.01, Gauge.target)
+
 -- A building that is not an inn (the Goldshire smithy): not colder than a mild afternoon outside,
 -- warmer than the night outside. Elwynn at 15:00 is 15 outside.
 world.mapID, world.zoneText = 1429, "Elwynn Forest"
@@ -461,12 +522,30 @@ world.swimming = false
 Tick(120)
 check("dried in the heat", math.abs(Gauge.target - 100) < 0.01, Gauge.target)
 
+-- Soaked, then a 20 s loading screen into an inn. That time counts where you were (Elwynn at 15:00 is
+-- 15, so clothes dry in 90 s): 1 - 20 / 90 = 0.78 left, not the inn's fast drying.
+world.mapID, world.zoneText = 1429, "Elwynn Forest"
+world.swimming = true
+Tick(2)
+world.swimming = false
+Tick(1)
+world.time = world.time + 20
+world.indoors, world.resting = true, true
+CoreEvent("PLAYER_ENTERING_WORLD")
+debugText = Slash("debug")
+check("loading time dries where you were", debugText:find("wetness 0.78", 1, true), debugText)
+world.indoors, world.resting = false, false
+CoreEvent("PLAYER_ENTERING_WORLD")
+
 -- Rain outdoors keeps clothes damp.
 world.mapID, world.zoneText, world.hour = 1429, "Elwynn Forest", 15
 world.weather = { type = 1, intensity = 1 }
 Tick(200)
 -- 5 + 10 - 12 = 3 env; wetness settles at 0.4: 3 - 12 = -9.
 check("rain keeps damp", math.abs(Gauge.target - (-9)) < 0.01, Gauge.target)
+
+-- The loading screens above must be over for the campfire scenarios: more than 5 s without an aura.
+Tick(6)
 
 -- Campfire in Dun Morogh at noon: -60 + 7.07 - 20 (snow) + 35, outdoors.
 world.weather = { type = 0, intensity = 0 }
@@ -522,6 +601,19 @@ for _ = 1, 13 do
 end
 check("secret aura does not linger", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 _G.issecretvalue = realIsSecret
+-- A client may hide only the aura's fields, not the table: the same as a hidden aura.
+Renew()
+Tick(1)
+check("by the fire before hidden fields", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
+_G.issecretvalue = function(value) return value == 60 end -- the aura's duration
+for _ = 1, 13 do
+	Tick(1)
+	Renew()
+end
+check("secret aura fields do not linger", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
+_G.issecretvalue = function(value) return value == 7353 end -- the buff's spell ID
+check("auras with a secret spell ID", Slash("auras"):find("hidden while auras are restricted", 1, true))
+_G.issecretvalue = realIsSecret
 world.auras[7353] = nil
 Tick(1)
 check("gap forgotten once the aura is gone", not Slash("debug"):find("every", 1, true))
@@ -543,6 +635,9 @@ world.pos = { x = 125, y = 100, map = 0 } -- 17 yd from where you stood: gone
 Tick(1)
 Tick(5)
 check("walked away cools in seconds", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
+world.pos = {} -- the game hides the position (an instance): the fire you left stays left
+Tick(1)
+check("hidden position keeps you away", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 world.pos, world.speed = { x = 109, y = 101, map = 0 }, 0 -- back to the fire, aura still on
 Tick(1)
 check("back by the fire warms again", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
@@ -551,9 +646,59 @@ Tick(5)
 check("another map counts as gone", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 debugText = Slash("debug")
 check("debug says far", debugText:find("far from the fire", 1, true), debugText)
+-- Hearth with the aura still on. The fire renewed the aura just before the loading screen, and after
+-- it the client may renumber the aura or drop it for a moment: none of that is a fire at the
+-- destination, and you arrive cold, not fading.
+world.pos = { x = 108, y = 100, map = 0 }
+Tick(1)
+check("by the fire before the hearth", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
+CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 501 } })
+world.pos = { x = 900, y = 40, map = 0 }
+CoreEvent("PLAYER_ENTERING_WORLD")
+check("arrive away from the fire", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
+CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 501 } }) -- the client refreshing its aura data
+Tick(1)
+check("aura refresh after a loading screen is no renewal", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
+world.auras[7353] = { spellId = 7353, auraInstanceID = 601 }
+Tick(1)
+world.auras[7353] = nil
+Tick(1)
+world.auras[7353] = { spellId = 7353, auraInstanceID = 602 }
+Tick(3)
+check("same aura after a loading screen is not a new fire", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
+-- A fire here renews the aura on its next beat: now it warms.
+Tick(1)
+CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 602 } })
+Tick(1)
+check("a fire after the loading screen warms", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
+-- A /reload (or a login) by the fire leaves you there.
+CoreEvent("PLAYER_ENTERING_WORLD", false, true)
+Tick(1)
+check("reload by the fire stays warm", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
+-- The position hidden for a while, at a new fire (new aura). Once the position is back, that fire is
+-- where you are, not the last fire's spot.
+world.pos = {}
+world.auras[7353] = { spellId = 7353, auraInstanceID = 603 }
+Tick(1)
+world.pos = { x = 500, y = 500, map = 0 }
+Tick(5)
+check("a fire found without a position anchors where you are", math.abs(Gauge.target - fullyWarm) < 0.01,
+	Gauge.target)
+
+-- Into an instance (no position) and out again: a fire you sat by inside does not follow you out.
+world.pos = {}
+CoreEvent("PLAYER_ENTERING_WORLD")
+Tick(6)
+CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 603 } }) -- a fire inside renews it
+Tick(1)
+check("fire inside an instance warms", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
+world.pos = { x = 300, y = 300, map = 0 }
+CoreEvent("PLAYER_ENTERING_WORLD")
+Tick(1)
+check("an instance fire stays behind", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 world.auras[7353] = nil
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
-Tick(1)
+Tick(6) -- the aura is gone, long enough after the loading screen
 
 -- A new fire (new aura) anchors anew, even far from the last one.
 world.auras[7353] = { spellId = 7353, auraInstanceID = 777 }
@@ -561,6 +706,34 @@ Tick(1)
 check("new fire warms where you are", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
 world.auras[7353] = nil
 Tick(1)
+
+-- A timed aura (6 s beat), then a hearth. The client refreshing the aura's data afterwards (UNIT_AURA)
+-- is no renewal: the timer tells. The first renewal where you arrive starts the beat afresh, so a gap
+-- across the loading screen is never learned as a beat.
+local function Renew700()
+	world.auras[7353] = { spellId = 7353, auraInstanceID = 700, duration = 60, expirationTime = world.time + 60 }
+end
+Renew700()
+Tick(1)
+Tick(5)
+Renew700()
+Tick(1)
+check("timed fire beat before the hearth", Slash("debug"):find("every 6.0 s", 1, true))
+world.pos = { x = 900, y = 900, map = 0 }
+CoreEvent("PLAYER_ENTERING_WORLD")
+CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 700 } })
+Tick(1)
+check("aura refresh after a hearth is no renewal", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
+Renew700() -- a fire here, 2 s after the last renewal at the old one
+Tick(1)
+check("first renewal after the hearth warms", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
+Tick(7)
+Renew700() -- this fire renews every 8 s
+Tick(1)
+check("beat measured afresh after the hearth", Slash("debug"):find("every 8.0 s", 1, true))
+world.auras[7353] = nil
+world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
+Tick(6)
 
 -- Two fires 15 yd apart, one aura without a timer. Fire B renews the same aura, and the game reports
 -- that in UNIT_AURA: the anchor moves to fire B.
@@ -584,6 +757,11 @@ CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 900 } })
 _G.issecretvalue = secretIsSecret
 Tick(1)
 check("secret aura updates ignored", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
+_G.issecretvalue = function(value) return type(value) == "table" and value[1] == 900 end -- only the ID list
+CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 900 } })
+_G.issecretvalue = secretIsSecret
+Tick(1)
+check("secret aura ID list ignored", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 world.auras[7353] = nil
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 Tick(1)
@@ -628,6 +806,55 @@ Tick(20)
 Renew()
 Tick(1)
 check("long absence starts over", Slash("debug"):find("gap not measured yet", 1, true))
+world.auras[7353] = nil
+Tick(1)
+
+-- From a 6 s fire to one nearby that renews the same aura every 14 s. One longer gap is a step away,
+-- but the same gap again is the new beat: by the slow fire it stays fully warm between renewals.
+Renew()
+Tick(1)
+Tick(5)
+Renew()
+Tick(1)
+for _ = 1, 3 do
+	Tick(13)
+	Renew()
+	Tick(1)
+end
+check("slower beat learned", Slash("debug"):find("every 14.0 s", 1, true))
+Tick(12) -- 13 s after the last renewal
+check("slow fire after a fast one stays warm", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
+world.auras[7353] = nil
+Tick(1)
+
+-- At the edge of a 6 s fire, missing every other renewal gives 12 s gaps: not a slower fire.
+Renew()
+Tick(1)
+Tick(5)
+Renew()
+Tick(1)
+for _ = 1, 2 do
+	Tick(11)
+	Renew()
+	Tick(1)
+end
+check("a multiple of the beat is not a new beat", Slash("debug"):find("every 6.0 s", 1, true))
+-- Small jitter (6.4 s twice) does not stretch the beat either.
+for _ = 1, 2 do
+	Tick(5)
+	local lastRenewal = world.auras[7353].expirationTime - 60
+	world.auras[7353] = { spellId = 7353, duration = 60, expirationTime = lastRenewal + 6.4 + 60 }
+	Tick(1)
+end
+check("jitter does not stretch the beat", Slash("debug"):find("every 6.0 s", 1, true))
+-- A real fire at twice the beat keeps coming: it is learned on the third 12 s gap.
+for _ = 1, 3 do
+	Tick(11)
+	local lastRenewal = world.auras[7353].expirationTime - 60
+	world.auras[7353] = { spellId = 7353, duration = 60, expirationTime = lastRenewal + 12 + 60 }
+	Tick(1)
+end
+check("a slower fire at twice the beat is learned", Slash("debug"):find("every 12.0 s", 1, true))
 world.auras[7353] = nil
 Tick(1)
 
@@ -762,7 +989,7 @@ check("sweep ends on real reading", Gauge.target ~= 100, Gauge.target)
 Slash("")
 check("slash opens settings", settings.opened == 7)
 settings.FEELSLIKE_UNIT.callback(nil, "F")
-check("unit callback runs", true)
+check("unit setting switches the glyph", unitLayer.svg:find("unit_f.svg", 1, true), unitLayer.svg)
 check("usage on unknown", Slash("nope"):find("/feels debug", 1, true))
 
 -- SVG files that fail to load fall back to the line dial ------------------------
@@ -771,6 +998,7 @@ svg.result = false
 ns = LoadAddon(true)
 svg.result = true
 check("svg failure falls back to lines", ns.Gauge.renderer == "lines", ns.Gauge.renderer)
+check("no more svg loaded after a failure", #vectorLayers == 1, #vectorLayers)
 for _, layer in ipairs(vectorLayers) do
 	check("failed svg layer hidden", layer.shown == false)
 end
@@ -782,12 +1010,21 @@ ns = LoadAddon(false)
 svg.supported = true
 check("no svg support uses lines", ns.Gauge.renderer == "lines", ns.Gauge.renderer)
 check("retail detected", not ns.Sensors.isForever)
+-- Retail's default place: below the minimap at 158 degrees, 1.66 radii out.
+local retailPoint = _G.FeelsLikeGauge.point
+check("retail minimap offset", retailPoint and math.abs(retailPoint[4] - 198 / 2 * 1.66 * math.sin(math.rad(158)) / 0.45) < 0.01,
+	retailPoint and retailPoint[4])
 world.mapID, world.zoneText, world.hour = 27, "Dun Morogh", 3
 Tick(1)
 -- No weather: -60 - 8 = -68.
 check("retail dun morogh", math.abs(ns.Gauge.target - (-68)) < 0.01, ns.Gauge.target)
 debugText = Slash("debug")
 check("retail debug says no weather", debugText:find("no C_Weather", 1, true), debugText)
+world.mapID, world.zoneText = 90, "Undercity"
+world.indoors, world.resting = true, true
+Tick(3)
+check("retail undercity keeps its own value", math.abs(ns.Gauge.target - (-20)) < 0.01 and ns.Gauge.cozy == false,
+	ns.Gauge.target)
 
 if failures > 0 then
 	io.write(failures .. " failed\n")

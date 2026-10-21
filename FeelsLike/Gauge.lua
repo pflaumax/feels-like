@@ -1,4 +1,4 @@
--- The gauge frame: size, place, dragging, the needle's smooth movement and the word under it.
+-- The gauge frame: size, place, dragging, the needle's smooth movement and the word next to it.
 -- Drawing is done by a dial: DialVector (SVG, sharp at any scale) or, on older clients, DialLines.
 
 local _, ns = ...
@@ -9,12 +9,15 @@ ns.Gauge = Gauge
 
 local SIZE = 72 -- unscaled; the default scale is 0.45
 local LABEL_GAP = 1
+-- Within this many minimap radii the word goes on the side away from the minimap (see PlaceLabel).
+local LABEL_NEAR_MINIMAP = 2.5
 
--- Default place: just below the minimap, by the clock. Picked in game with the classic-style UI
--- (2026-10-04, /feels debug): 158 degrees from 12 o'clock, 1.66 minimap radii from its center.
--- In radii, so it stays in place whatever size the minimap has.
-local MINIMAP_ANGLE = 158
-local MINIMAP_DISTANCE = 1.66
+-- Default place, in minimap radii so it stays in place whatever size the minimap has.
+-- Forever: on the minimap ring, mirroring the day/night button (from Forever screenshots, 2026-10-21;
+-- to be confirmed in game with /feels measure). Retail with the classic-style UI: just below the
+-- minimap, by the clock (picked in game, 2026-10-04, /feels debug).
+local MINIMAP_ANGLE = ns.Sensors.isForever and 327 or 158
+local MINIMAP_DISTANCE = ns.Sensors.isForever and 1.03 or 1.66
 -- Fallback when there is no minimap: bottom right, above the bag bar. Screen (UIParent) units.
 local FALLBACK_X = -110
 local FALLBACK_Y = 140
@@ -31,6 +34,43 @@ Gauge.target = 0
 Gauge.display = 0
 Gauge.cozy = false
 
+-- Where a frame's center is from the minimap's center, in screen pixels (each frame's coordinates are in
+-- its own scale). Returns dx, dy and the minimap radius, or nil while either is not placed.
+local function OffsetFromMinimap(target)
+	if not Minimap then
+		return nil
+	end
+	local x, y = target:GetCenter()
+	local mx, my = Minimap:GetCenter()
+	if not (x and mx) then
+		return nil
+	end
+	local scale, minimapScale = target:GetEffectiveScale(), Minimap:GetEffectiveScale()
+	return x * scale - mx * minimapScale, y * scale - my * minimapScale, Minimap:GetWidth() / 2 * minimapScale
+end
+
+-- The word goes on the side of the gauge away from the minimap, so it never covers the map: left or
+-- right of a gauge beside the minimap, above or below one over or under it. Far from the minimap, below.
+local function PlaceLabel()
+	label:ClearAllPoints()
+	local dx, dy, radius = OffsetFromMinimap(frame)
+	local distance = dx and math.sqrt(dx * dx + dy * dy)
+	if distance and distance > 0 and distance <= LABEL_NEAR_MINIMAP * radius then
+		if math.abs(dx) >= distance / 2 then
+			if dx < 0 then
+				label:SetPoint("RIGHT", frame, "LEFT", -LABEL_GAP, 0)
+			else
+				label:SetPoint("LEFT", frame, "RIGHT", LABEL_GAP, 0)
+			end
+			return
+		elseif dy > 0 then
+			label:SetPoint("BOTTOM", frame, "TOP", 0, LABEL_GAP)
+			return
+		end
+	end
+	label:SetPoint("TOP", frame, "BOTTOM", 0, -LABEL_GAP)
+end
+
 local function UpdateLabel()
 	local visible = db.label == "always" or (db.label == "hover" and hovered)
 	if not visible then
@@ -40,13 +80,14 @@ local function UpdateLabel()
 	local band = Model.Band(Gauge.target, Gauge.cozy)
 	label:SetText(band.word)
 	label:SetTextColor(band.color[1], band.color[2], band.color[3])
+	PlaceLabel() -- the minimap may have moved since the gauge was placed
 	label:Show()
 end
 
--- A locked gauge without a hover word needs no mouse, so clicks reach the minimap below it.
--- Without the mouse no OnLeave arrives, so drop the hover state here.
+-- A locked gauge needs the mouse only to show the word on hover; otherwise clicks reach the minimap
+-- below it. Without the mouse no OnLeave arrives, so drop the hover state here.
 local function UpdateMouse()
-	local enabled = not (db.locked and db.label == "never")
+	local enabled = not db.locked or db.label == "hover"
 	frame:EnableMouse(enabled)
 	if not enabled then
 		hovered = false
@@ -92,7 +133,6 @@ function Gauge:Create(savedVariables)
 	local labelFrame = CreateFrame("Frame", nil, UIParent)
 	labelFrame:SetFrameStrata(frame:GetFrameStrata())
 	label = labelFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-	label:SetPoint("TOP", frame, "BOTTOM", 0, -LABEL_GAP)
 
 	-- Shift is required, so a click on the gauge never moves it by accident.
 	frame:SetScript("OnDragStart", function(self)
@@ -193,27 +233,26 @@ function Gauge:ApplyPosition()
 	else
 		frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", FALLBACK_X / scale, FALLBACK_Y / scale)
 	end
+	PlaceLabel()
+end
+
+-- Where a frame sits by the minimap, and the gauge scale that would make the gauge as wide: to pick a
+-- default place and size next to a minimap button (/feels measure <frame name>, /feels debug).
+function Gauge:Describe(target)
+	local dx, dy, radius = OffsetFromMinimap(target)
+	if not dx then
+		return "not placed by a minimap"
+	end
+	local angle = math.deg(math.atan2(dx, dy)) % 360
+	local distance = math.sqrt(dx * dx + dy * dy)
+	local matchingScale = target:GetWidth() * target:GetEffectiveScale() / (SIZE * UIParent:GetEffectiveScale())
+	return string.format("%.0f degrees from 12 o'clock, %.2f of the minimap radius from its center, as wide as the gauge at scale %.2f",
+		angle, radius > 0 and distance / radius or 0, matchingScale)
 end
 
 -- For /feels debug: where the gauge is, relative to the minimap, so a good spot can become the default.
 function Gauge:DescribePosition()
-	local where = db.x and "moved" or "default"
-	if not Minimap then
-		return where
-	end
-	local x, y = frame:GetCenter()
-	local mx, my = Minimap:GetCenter()
-	if not (x and mx) then
-		return where
-	end
-	-- Compare in screen pixels: each frame's coordinates are in its own scale.
-	local scale, minimapScale = frame:GetEffectiveScale(), Minimap:GetEffectiveScale()
-	local dx, dy = x * scale - mx * minimapScale, y * scale - my * minimapScale
-	local radius = Minimap:GetWidth() / 2 * minimapScale
-	local angle = math.deg(math.atan2(dx, dy)) % 360
-	local distance = math.sqrt(dx * dx + dy * dy)
-	return string.format("%s; %.0f degrees from 12 o'clock, %.2f of the minimap radius from its center",
-		where, angle, radius > 0 and distance / radius or 0)
+	return (db.x and "moved" or "default") .. "; " .. self:Describe(frame)
 end
 
 function Gauge:ResetPosition()

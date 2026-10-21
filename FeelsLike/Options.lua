@@ -45,7 +45,7 @@ function Options:Register(db)
 		ns.Gauge:SetLabelMode(value)
 	end)
 	Settings.CreateDropdown(category, label, LabelOptions,
-		"One word under the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.")
+		"One word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.")
 
 	local locked = Settings.RegisterAddOnSetting(category, "FEELSLIKE_LOCKED", "locked", db,
 		Settings.VarType.Boolean, "Lock position", defaults.locked)
@@ -65,7 +65,7 @@ function Options:Register(db)
 
 	layout:AddInitializer(CreateSettingsButtonInitializer("Position", "Reset", function()
 		ns.Gauge:ResetPosition()
-	end, "Move the gauge back to its default place below the minimap.", true))
+	end, "Move the gauge back to its default place by the minimap.", true))
 
 	Settings.RegisterAddOnCategory(category)
 	self.category = category

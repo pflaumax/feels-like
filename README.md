@@ -18,9 +18,9 @@ Inspired by the temperature gauge in *The Legend of Zelda: Breath of the Wild* a
 
 ## Reading the gauge
 
-Blue on the left is cold, red on the right is hot. Near the ends of the scale the gold ring turns icy or red-hot. Hover the gauge for one word under it: Freezing, Cold, Mild, Warm, Hot, Scorching, or Cozy.
+Blue on the left is cold, red on the right is hot. Near the ends of the scale the ring turns icy or red-hot. Hover the gauge for one word next to it: Freezing, Cold, Mild, Warm, Hot, Scorching, or Cozy.
 
-By default the gauge sits just below the minimap. Hold Shift and drag it anywhere you like.
+By default the gauge sits by the minimap. Hold Shift and drag it anywhere you like.
 
 ## Settings
 
@@ -43,6 +43,7 @@ Options → AddOns → Feels Like:
 | `/feels test sweep` | Sweeps the needle across the whole scale, then returns to the real reading |
 | `/feels test cozy` | Toggles the Cozy word for 30 seconds |
 | `/feels test off` | Immediately returns to the real reading |
+| `/feels measure <frame>` | Shows where a frame (name from `/fstack`) sits by the minimap and which gauge scale matches its size |
 
 ## Installation
 

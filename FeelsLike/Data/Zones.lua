@@ -3,9 +3,14 @@
 
 local _, ns = ...
 
-local function Zone(base, climate)
-	return { base = base, climate = climate }
+local function Zone(base, climate, inside)
+	return { base = base, climate = climate, inside = inside }
 end
+
+-- A place that is inside as a whole (in a mountain, underground). Its value already describes how it
+-- feels in there, so shelter and inns do not apply, as in instances. The game reports such a city as
+-- indoors and resting everywhere, so without this it would read as one big inn.
+local INSIDE = true
 
 ns.Zones = {}
 
@@ -59,8 +64,8 @@ ns.Zones.forever = {
 	[1436] = Zone(10, "temperate"), -- Westfall
 	[1437] = Zone(-10, "temperate"), -- Wetlands
 	[1453] = Zone(5, "temperate"), -- Stormwind City
-	[1455] = Zone(25, "none"), -- Ironforge: inside the mountain, by the forges
-	[1458] = Zone(-20, "none"), -- Undercity: underground crypts
+	[1455] = Zone(25, "none", INSIDE), -- Ironforge: inside the mountain, by the forges
+	[1458] = Zone(-20, "none", INSIDE), -- Undercity: underground crypts
 	[2548] = Zone(10, "temperate"), -- Riverglades (new, check in game)
 
 	-- Skyborne start zone; two map IDs in the game data
@@ -77,7 +82,8 @@ ns.Zones.retail = {
 	[83] = Zone(-80, "snow"), -- Winterspring
 	[84] = Zone(5, "temperate"), -- Stormwind City
 	[85] = Zone(25, "arid"), -- Orgrimmar
-	[87] = Zone(25, "none"), -- Ironforge
+	[87] = Zone(25, "none", INSIDE), -- Ironforge
+	[90] = Zone(-20, "none", INSIDE), -- Undercity
 }
 
 -- Subzone overrides per areaID. The same area IDs work in both clients; an area missing in a client is skipped.
@@ -94,5 +100,5 @@ ns.Zones.subzones = {
 	[16513] = Zone(90, "volcanic"), -- Blackrock Mountain (Burning Steppes)
 	[537] = Zone(90, "volcanic"), -- Fire Plume Ridge (Un'Goro Crater)
 	[246] = Zone(100, "volcanic"), -- The Cauldron (Searing Gorge): lava pit
-	[5342] = Zone(45, "none"), -- The Great Forge (Ironforge, Retail only)
+	[5342] = Zone(45, "none", INSIDE), -- The Great Forge (Ironforge, Retail only)
 }

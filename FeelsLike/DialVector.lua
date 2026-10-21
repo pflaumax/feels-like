@@ -4,7 +4,8 @@
 -- full circles drawn under the face, and the face covers its middle.
 -- VectorGraphics cannot rotate, so the needle is 91 pre-rotated SVG files, 3 degrees apart. All 91 are
 -- loaded once and switched by alpha: loading a new file into one layer leaves it empty for a moment,
--- which made the needle blink on every step (seen in game, 2026-10-04).
+-- which made the needle blink on every step (seen in game, 2026-10-04). Unused layers stay shown at
+-- alpha 0 rather than hidden: alpha switching is what was seen to work without a blink.
 -- Needs WoW 12.1.0 or Forever 1.60.1; returns nil on older clients, and Gauge falls back to DialLines.
 
 local addonName, ns = ...
@@ -14,7 +15,7 @@ local DialVector = {}
 ns.DialVector = DialVector
 
 local MEDIA = "Interface\\AddOns\\" .. addonName .. "\\Media\\"
-local NEEDLE_STEPS = 90 -- Media\Needle\00.svg … 90.svg span Model.MIN … Model.MAX
+local NEEDLE_STEPS = 90 -- Media\Needle\00.svg … 90.svg span Model.MIN … Model.MAX; make_svg.py reads it
 
 -- Applies alpha, or plain show/hide if a VectorGraphics object has no SetAlpha.
 local function SetLayerAlpha(layer, alpha)
@@ -32,12 +33,18 @@ function DialVector.Create(frame)
 		return nil
 	end
 
+	-- After the first file that fails to load, the rest are not loaded: the line dial takes over anyway.
 	local layers = {}
+	local failed = false
 	local function Layer(file, drawLayer, subLevel)
+		if failed then
+			return nil
+		end
 		local layer = frame:CreateVectorGraphics(nil, drawLayer, nil, subLevel)
 		layer:SetAllPoints(frame)
 		layers[#layers + 1] = layer
 		if not layer:SetSVG(MEDIA .. file) then
+			failed = true
 			return nil
 		end
 		return layer
@@ -50,17 +57,15 @@ function DialVector.Create(frame)
 	local scale = Layer("scale.svg", "ARTWORK", 0)
 	local unitGlyph = Layer("unit_c.svg", "ARTWORK", 1)
 	local needles = {}
-	local needlesLoaded = true
 	for step = 0, NEEDLE_STEPS do
 		needles[step] = Layer(string.format("Needle\\%02d.svg", step), "ARTWORK", 2)
-		needlesLoaded = needlesLoaded and needles[step] ~= nil
 	end
-	local ringGold = Layer("ring_gold.svg", "BACKGROUND", 0)
+	-- The ring matches the minimap around it: bronze in Forever, gold like the Retail minimap buttons.
+	Layer(ns.Sensors.isForever and "ring_bronze.svg" or "ring_gold.svg", "BACKGROUND", 0)
 	local ringIcy = Layer("ring_icy.svg", "BACKGROUND", 1)
 	local ringHot = Layer("ring_hot.svg", "BACKGROUND", 2)
 
-	if not (face and faceCold and faceHot and scale and unitGlyph and needlesLoaded
-		and ringGold and ringIcy and ringHot) then
+	if failed then
 		for _, layer in ipairs(layers) do
 			layer:Hide()
 		end
