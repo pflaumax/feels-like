@@ -1,0 +1,3 @@
+# The Python tools in tools/ follow the line length of the Lua code.
+line-length = 120
+target-version = "py39"

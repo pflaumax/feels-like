@@ -9,8 +9,10 @@ if [ -z "$version" ]; then
 	exit 1
 fi
 
-# Regenerates the SVG layers and fails if any uses a shape the game does not draw.
-(cd "$root" && python3 tools/make_svg.py)
+# Fails if the committed SVG layers or icon differ from what the tools draw (or an SVG uses a shape
+# the game does not draw). Writes nothing, so the zip holds exactly the committed art.
+(cd "$root" && uv run tools/make_svg.py --check)
+(cd "$root" && uv run tools/make_icon.py --check)
 (cd "$root" && luajit tests/model_test.lua)
 (cd "$root" && luajit tests/smoke_test.lua)
 
