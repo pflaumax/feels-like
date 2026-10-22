@@ -66,13 +66,25 @@ check("extreme max cold", cold, 0)
 cold, hot = Model.Extremes(-1000)
 check("extreme clamped cold", cold, 1)
 
--- Day/night: warmest at 15:00, coldest at 03:00
+-- Day/night: day 09:00 to 21:00, warmest at 15:00; the night falls to its coldest at 05:00 and climbs
+-- back by 09:00.
 near("day peak desert", Model.DayNight(15, "desert"), 50)
-near("night low desert", Model.DayNight(3, "desert"), -50)
+near("night low desert", Model.DayNight(5, "desert"), -50)
 near("day peak arid", Model.DayNight(15, "arid"), 30)
 near("dusk desert", Model.DayNight(21, "desert"), 0)
-near("volcanic flat", Model.DayNight(3, "volcanic"), 0)
-near("unknown climate flat", Model.DayNight(3, "nope"), 0)
+near("dawn desert", Model.DayNight(9, "desert"), 0)
+near("morning is a half sine", Model.DayNight(12, "temperate"), 10 * math.sin(math.pi / 4))
+near("temperate day peak", Model.DayNight(15, "temperate"), 10)
+near("temperate night goes deeper", Model.DayNight(5, "temperate"), -30)
+near("night falls over 8 hours", Model.DayNight(1, "temperate"), -30 * math.sin(math.pi / 4))
+near("midnight", Model.DayNight(0, "temperate"), -30 * math.sin(math.pi * 3 / 16))
+near("morning climbs over 4 hours", Model.DayNight(7, "temperate"), -30 * math.sin(math.pi / 4))
+near("hour 24 is midnight", Model.DayNight(24, "temperate"), Model.DayNight(0, "temperate"))
+near("volcanic flat", Model.DayNight(5, "volcanic"), 0)
+near("unknown climate flat", Model.DayNight(5, "nope"), 0)
+-- A mild zone at night: Mulgore (10) before dawn is in the coolest Mild segment.
+check("mild zone night word", Model.Band(10 + Model.DayNight(5, "temperate")).word, "Mild")
+check("mild zone night segment", Model.SegmentIndex(10 + Model.DayNight(5, "temperate")), 5)
 
 -- Compute
 local base = { base = 0, climate = "none", hour = 0, weather = nil, weatherIntensity = 0 }
@@ -95,9 +107,26 @@ near("inside place keeps campfire", Model.Compute(state({ base = -20, indoors = 
 near("no weather inside a place", Model.Compute(state({ base = -20, inside = true, weather = "snow", weatherIntensity = 1 }), 0).target, -20)
 near("no rain soaks inside a place", Model.UpdateWetness(0, 60, state({ inside = true, weather = "rain", weatherIntensity = 1 }), 0), 0)
 near("campfire", Model.Compute(state({ base = -60, campfire = 1 }), 0).target, -25)
-near("wet", Model.Compute(state({ base = 0 }), 0.5).target, -15)
+-- A fire warms up to 45 and no further, and never cools.
+near("campfire stops at warm", Model.Compute(state({ base = 20, campfire = 1 }), 0).target, 45)
+check("campfire on a mild day is cozy", Model.Compute(state({ base = 20, campfire = 1 }), 0).cozy, true)
+near("campfire does not cool", Model.Compute(state({ base = 90, campfire = 1 }), 0).target, 90)
+-- A torch in hand warms by 20, under the same limit; not in an inn, not in water.
+near("torch", Model.Compute(state({ base = -60, torch = true }), 0).target, -40)
+near("torch and campfire share the limit", Model.Compute(state({ base = 0, campfire = 1, torch = true }), 0).target, 45)
+near("torch next to a campfire", Model.Compute(state({ base = -60, campfire = 1, torch = true }), 0).target, -5)
+check("torch is not cozy", Model.Compute(state({ base = 0, torch = true }), 0).cozy, false)
+near("torch in an inn", Model.Compute(state({ base = 5, indoors = true, inn = true, torch = true }), 0).target, 20.3)
+near("torch in water", Model.Compute(state({ base = 0, torch = true, swimming = true }), 1).target, -50)
+-- Wet clothes take half the warmth above the bottom of the scale when soaked.
+near("wet", Model.Compute(state({ base = 0 }), 0.5).target, -25)
+check("soaked on a mild day is cold", Model.Band(Model.Compute(state({ base = 20 }), 1).target).word, "Cold")
+check("soaked on a mild night is cold", Model.Band(Model.Compute(state({ base = -25 }), 1).target).word, "Cold")
+check("soaked in the snow is freezing", Model.Band(Model.Compute(state({ base = -60 }), 1).target).word, "Freezing")
+near("soaked at a desert noon", Model.Compute(state({ base = 100 }), 1).target, 0)
+near("no wet chill below the scale", Model.Compute(state({ base = -110 }), 1).wet, 0)
 near("weather scaled", Model.Compute(state({ base = 0, weather = "snow", weatherIntensity = 0.5 }), 0).target, -10)
-near("clamped", Model.Compute(state({ base = 90, campfire = 1 }), 0).target, 100)
+near("clamped", Model.Compute(state({ base = 120 }), 0).target, 100)
 check("inn cozy", Model.Compute(state({ base = 5, indoors = true, inn = true }), 0).cozy, true)
 check("campfire too hot not cozy", Model.Compute(state({ base = 75, campfire = 1 }), 0).cozy, false)
 check("campfire still cold not cozy", Model.Compute(state({ base = -100, campfire = 1 }), 0).cozy, false)

@@ -2,7 +2,7 @@
 ## Title: Feels Like
 ## Notes: A tiny temperature gauge. Shows how hot or cold your character feels.
 ## Author: fau2
-## Version: 0.1.0
+## Version: 0.1.1
 ## Category: Roleplay
 ## IconTexture: Interface\AddOns\FeelsLike\Media\Icon
 ## SavedVariables: FeelsLikeDB

@@ -100,15 +100,17 @@ end
 
 -- Felt temperature. Formula and draft values: PLAN.md section 6.
 
--- Half of the day/night difference, per climate. Sand deserts swing hardest: scorching afternoons, mild nights.
+-- How far the time of day moves the reading, per climate: up at the warmest hour, down at the coldest.
+-- Sand deserts swing hardest: scorching afternoons, mild nights. Temperate nights go deeper than their
+-- days, so a mild zone cools into the coolest Mild segment before dawn while its days stay Mild.
 Model.CLIMATE_SWING = {
-	desert = 50,
-	arid = 30,
-	temperate = 10,
-	snow = 8,
-	tropical = 6,
-	volcanic = 0,
-	none = 0,
+	desert = { day = 50, night = 50 },
+	arid = { day = 30, night = 30 },
+	temperate = { day = 10, night = 30 },
+	snow = { day = 8, night = 8 },
+	tropical = { day = 6, night = 6 },
+	volcanic = { day = 0, night = 0 },
+	none = { day = 0, night = 0 },
 }
 
 -- At full intensity.
@@ -118,7 +120,12 @@ Model.WEATHER_DELTA = {
 	sandstorm = 10,
 }
 
-local PEAK_HOUR = 15 -- warmest hour; the coldest is 12 hours later
+-- Server time. The day runs from 09:00 to 21:00 and is warmest at 15:00; Forever's sky turns to night
+-- at about 21:00 (seen 2026-10-21). The night cools down to the coldest hour before dawn, then warms up
+-- faster.
+local DAY_START = 9
+local DAY_END = 21
+local COLDEST_HOUR = 5
 
 -- Shelter pulls the reading toward a room temperature; the factor is how much of the outside gets in.
 -- A building is a pleasant room (hearths, people, no wind), so on a mild day it is not colder inside,
@@ -133,7 +140,12 @@ local INN_FACTOR = 0.1
 local SHELTER_SETTLE = 2
 
 local CAMPFIRE_WARMTH = 35
-local WET_CHILL = 30 -- at fully soaked clothes
+local TORCH_WARMTH = 20
+-- Fire warms you up to this and no further: by a campfire on a mild day it is Warm and Cozy, not Hot.
+local FIRE_CEILING = 45
+-- Soaked clothes take away this share of the warmth above the bottom of the scale: in water a mild day
+-- reads Cold and a snow zone Freezing, while a desert noon only cools down to Mild.
+local WET_CHILL = 0.5
 
 -- Cozy only while the result is Mild or Warm: a campfire at noon in Tanaris is not cozy.
 local COZY_FIRST_SEGMENT = 5
@@ -222,13 +234,32 @@ local function InInn(state)
 	return state.inn and not HasOwnShelter(state)
 end
 
+-- hour: 0..24. By day a half sine; by night a fall to the coldest hour and a shorter climb back.
 function Model.DayNight(hour, climate)
-	local swing = Model.CLIMATE_SWING[climate] or 0
-	return swing * math.cos(2 * math.pi * (hour - PEAK_HOUR) / 24)
+	local swing = Model.CLIMATE_SWING[climate]
+	if not swing then
+		return 0
+	end
+	local dayLength = DAY_END - DAY_START
+	local sinceDayStart = (hour - DAY_START) % 24
+	if sinceDayStart < dayLength then
+		return swing.day * math.sin(math.pi * sinceDayStart / dayLength)
+	end
+	local sinceDusk = sinceDayStart - dayLength
+	local nightLength = 24 - dayLength
+	local fall = (COLDEST_HOUR - DAY_END) % 24
+	local depth
+	if sinceDusk < fall then
+		depth = math.sin(math.pi / 2 * sinceDusk / fall)
+	else
+		depth = math.sin(math.pi / 2 * (nightLength - sinceDusk) / (nightLength - fall))
+	end
+	return -swing.night * depth
 end
 
 -- state: base, climate, hour, weather (kind or nil), weatherIntensity (0..1), indoors, inn, inInstance,
 -- inside (the place is inside as a whole, see Zones.lua), campfire (0..1, see Model.CampfireNearness),
+-- torch (set while a lit torch lights you, see Sensors), swimming,
 -- burning (0..1, see Model.Burning).
 -- wetness: 0..1. Returns every step, so /feels debug can print them.
 -- Instance values and places that are inside as a whole already describe how the place feels inside,
@@ -252,11 +283,14 @@ function Model.Compute(state, wetness)
 		r.sheltered = r.env
 	end
 
-	-- An inn is already warm; a lingering campfire aura must not make it hot.
+	-- An inn is already warm; a lingering campfire aura must not make it hot. Water puts a torch out.
 	local campfire = inn and 0 or (state.campfire or 0)
-	r.campfire = CAMPFIRE_WARMTH * campfire
-	r.dry = r.sheltered + r.campfire
-	r.wet = -WET_CHILL * wetness
+	local torch = not inn and state.torch and not state.swimming
+	local room = math.max(0, FIRE_CEILING - r.sheltered)
+	r.campfire = math.min(CAMPFIRE_WARMTH * campfire, room)
+	r.torch = torch and math.min(TORCH_WARMTH, room - r.campfire) or 0
+	r.dry = r.sheltered + r.campfire + r.torch
+	r.wet = -WET_CHILL * wetness * math.max(0, r.dry - Model.MIN)
 	-- Fire underfoot pulls the reading toward the hot end, whatever the zone.
 	local beforeBurn = r.dry + r.wet
 	r.burn = math.max(0, (Model.MAX - beforeBurn) * (state.burning or 0))

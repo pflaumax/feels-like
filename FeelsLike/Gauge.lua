@@ -7,17 +7,25 @@ local Model = ns.Model
 local Gauge = {}
 ns.Gauge = Gauge
 
-local SIZE = 72 -- unscaled; the default scale is 0.45
+local SIZE = 72 -- unscaled; the default scale is in ns.DEFAULTS
 local LABEL_GAP = 1
 -- Within this many minimap radii the word goes on the side away from the minimap (see PlaceLabel).
 local LABEL_NEAR_MINIMAP = 2.5
 
 -- Default place, in minimap radii so it stays in place whatever size the minimap has.
--- Forever: on the minimap ring, mirroring the day/night button (from Forever screenshots, 2026-10-21;
--- to be confirmed in game with /feels measure). Retail with the classic-style UI: just below the
--- minimap, by the clock (picked in game, 2026-10-04, /feels debug).
-local MINIMAP_ANGLE = ns.Sensors.isForever and 327 or 158
-local MINIMAP_DISTANCE = ns.Sensors.isForever and 1.03 or 1.66
+-- Forever: on the minimap ring, the mirror image of the day/night button. Blizzard anchors that button
+-- 55 right and 86 up from the center of the 198-wide minimap (Blizzard_Minimap/Camelot/Diel.lua, 1.60.1).
+-- Retail with the classic-style UI: just below the minimap, by the clock (picked in game, 2026-10-04,
+-- /feels debug).
+local MINIMAP_ANGLE = ns.Sensors.isForever and 360 - math.deg(math.atan2(55, 86)) or 158
+local MINIMAP_DISTANCE = ns.Sensors.isForever and math.sqrt(55 * 55 + 86 * 86) / 99 or 1.66
+-- Forever with a classic-style minimap: 140 wide like the 1.x one (ClassicUI Forever) instead of Blizzard's 198.
+-- Its ring is full of buttons by default, so the gauge goes under it, by the clock: 55 left and 90 down from the
+-- center, left of the coordinates line and clear of the addon buttons at 225 and 237 degrees (ClassicUI Forever
+-- 0.36.0, Map/Minimap.lua and Map/MinimapButton.lua).
+local CLASSIC_MINIMAP_WIDTH = 170 -- a minimap narrower than this counts as classic-style
+local CLASSIC_ANGLE = 180 + math.deg(math.atan2(55, 90))
+local CLASSIC_DISTANCE = math.sqrt(55 * 55 + 90 * 90) / 70
 -- Fallback when there is no minimap: bottom right, above the bag bar. Screen (UIParent) units.
 local FALLBACK_X = -110
 local FALLBACK_Y = 140
@@ -47,6 +55,11 @@ local function OffsetFromMinimap(target)
 	end
 	local scale, minimapScale = target:GetEffectiveScale(), Minimap:GetEffectiveScale()
 	return x * scale - mx * minimapScale, y * scale - my * minimapScale, Minimap:GetWidth() / 2 * minimapScale
+end
+
+-- A classic-style minimap in Forever: the gauge has its own default place and ring there.
+local function IsClassicMinimap()
+	return ns.Sensors.isForever and Minimap ~= nil and Minimap:GetWidth() < CLASSIC_MINIMAP_WIDTH
 end
 
 -- The word goes on the side of the gauge away from the minimap, so it never covers the map: left or
@@ -159,7 +172,7 @@ function Gauge:Create(savedVariables)
 		UpdateLabel()
 	end)
 
-	-- The minimap can change size or place after login (Edit Mode).
+	-- The minimap can change size or place after login (Edit Mode, or an addon making it classic-style).
 	frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 	if C_EventUtils and C_EventUtils.IsEventValid("EDIT_MODE_LAYOUTS_UPDATED") then
 		frame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
@@ -221,14 +234,16 @@ end
 
 -- Point offsets are in the frame's own scale, so divide screen offsets by it.
 function Gauge:ApplyPosition()
+	local classic = IsClassicMinimap()
+	dial:SetClassic(classic) -- the ring follows the minimap's buttons, wherever the gauge is
 	local scale = frame:GetScale()
 	frame:ClearAllPoints()
 	if db.x and db.y then
 		frame:SetPoint("CENTER", UIParent, "CENTER", db.x / scale, db.y / scale)
 	elseif Minimap then
 		local toScreen = Minimap:GetEffectiveScale() / UIParent:GetEffectiveScale()
-		local radius = Minimap:GetWidth() / 2 * MINIMAP_DISTANCE * toScreen
-		local x, y = Model.Polar(MINIMAP_ANGLE, radius)
+		local radius = Minimap:GetWidth() / 2 * (classic and CLASSIC_DISTANCE or MINIMAP_DISTANCE) * toScreen
+		local x, y = Model.Polar(classic and CLASSIC_ANGLE or MINIMAP_ANGLE, radius)
 		frame:SetPoint("CENTER", Minimap, "CENTER", x / scale, y / scale)
 	else
 		frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", FALLBACK_X / scale, FALLBACK_Y / scale)
@@ -252,7 +267,8 @@ end
 
 -- For /feels debug: where the gauge is, relative to the minimap, so a good spot can become the default.
 function Gauge:DescribePosition()
-	return (db.x and "moved" or "default") .. "; " .. self:Describe(frame)
+	local layout = IsClassicMinimap() and ", classic-style minimap" or ""
+	return (db.x and "moved" or "default") .. layout .. "; " .. self:Describe(frame)
 end
 
 function Gauge:ResetPosition()

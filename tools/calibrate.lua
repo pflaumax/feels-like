@@ -1,4 +1,4 @@
--- Prints the tooltip word for every Forever zone and instance at 15:00 and 03:00, outdoors and dry.
+-- Prints the tooltip word for every Forever zone and instance at 15:00 and 05:00 (the warmest and the coldest hour), outdoors and dry.
 -- Run from the project root: luajit tools/calibrate.lua
 
 local ns = {}
@@ -32,7 +32,7 @@ local function Row(name, entry)
 		local r = Model.Compute(state, 0)
 		return string.format("%-9s %4d", Model.Band(r.target).word, math.floor(r.target + 0.5))
 	end
-	return string.format("  %-44s %-9s day %s   night %s", name, entry.climate, At(15), At(3))
+	return string.format("  %-44s %-9s day %s   night %s", name, entry.climate, At(15), At(5))
 end
 
 local function Print(title, entries, names)

@@ -9,12 +9,13 @@ Inspired by the temperature gauge in *The Legend of Zelda: Breath of the Wild* a
 ## What moves the needle
 
 - **Zone.** Every zone has its own climate. Dun Morogh is cold, Tanaris is scorching, Elwynn is mild. Some places are special: the hot springs of Winterspring, the lava of the Cauldron, Molten Core.
-- **Time of day.** Deserts burn in the afternoon and cool down at night. Snowy zones get colder after dark.
+- **Time of day.** Deserts burn in the afternoon and cool down at night. Nights are coldest before dawn: mild lands turn cool, the gloomy ones cold, snowy zones colder still.
 - **Weather.** Rain and snow cool you down, sandstorms heat you up.
 - **Shelter.** A building feels like a warm room: cooler than a scorching day, warmer than a freezing night. An inn is cozy.
-- **Campfire.** Sit by a fire to warm up.
+- **Campfire.** Sit by a fire to warm up and feel cozy, Forever's new camp fires included. Once you sat down, you can stand up and stay by the fire. A fire warms you up to Warm, never to Hot.
+- **Torch.** Light the Night Watchman's Torch or hold a lit torch, and a cold night gets a little warmer.
 - **Fire underfoot.** Step into a campfire or lava and the needle jumps to scorching. Enemy fire spells in combat don't count.
-- **Water.** A swim chills you. Your clothes dry over time, faster in the heat.
+- **Water.** A swim chills you: cold in a mild land, freezing in the snow, just refreshing in a desert. Your clothes dry over time, faster in the heat.
 
 ## Reading the gauge
 

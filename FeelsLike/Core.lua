@@ -6,7 +6,10 @@ ns.DEFAULTS = {
 	unit = "C",
 	label = "hover",
 	locked = false,
-	scale = 0.45, -- picked in game with the classic-style UI (2026-10-04)
+	-- Forever: as big as the day/night button by the minimap, its band and outline on the button's
+	-- (measured on Forever screenshots, 2026-10-21). Retail: picked in game with the classic-style UI
+	-- (2026-10-04).
+	scale = ns.Sensors.isForever and 0.53 or 0.45,
 }
 
 local PREFIX = "|cffF2C94CFeels Like|r: "
@@ -42,8 +45,18 @@ local function Print(message)
 	print(PREFIX .. message)
 end
 
+-- The saved settings' version. 0.1.0 saved none, and it saved its defaults as if they were choices.
+local DB_VERSION = 2
+-- 0.1.0's default scale. A gauge still at it was likely never resized, so it takes this version's
+-- default (Forever's now matches the day/night button; Retail's is the same 0.45).
+local OLD_DEFAULT_SCALE = 0.45
+
 local function InitDB()
 	FeelsLikeDB = FeelsLikeDB or {}
+	if (FeelsLikeDB.version or 1) < 2 and FeelsLikeDB.scale == OLD_DEFAULT_SCALE then
+		FeelsLikeDB.scale = nil
+	end
+	FeelsLikeDB.version = DB_VERSION
 	for key, value in pairs(ns.DEFAULTS) do
 		if FeelsLikeDB[key] == nil then
 			FeelsLikeDB[key] = value
@@ -144,6 +157,11 @@ local function PrintDebug()
 	end
 	print(string.format("  env %s, %s: %s", Signed(r.env), shelter, Signed(r.sheltered)))
 	local details = {}
+	if s.campfireCamp == "sitting" then
+		details[#details + 1] = "sitting by a camp fire"
+	elseif s.campfireCamp == "stayed" then
+		details[#details + 1] = "near where you sat by a camp fire"
+	end
 	if s.campfireSince then
 		details[#details + 1] = string.format("renewed %.1f s ago, %s", s.campfireSince,
 			s.campfireGap and string.format("every %.1f s", s.campfireGap) or "gap not measured yet")
@@ -154,6 +172,7 @@ local function PrintDebug()
 	end
 	local campfireDetails = #details > 0 and " (" .. table.concat(details, "; ") .. ")" or ""
 	print(string.format("  campfire %.2f%s: %s", s.campfire, campfireDetails, Signed(r.campfire)))
+	print(string.format("  torch %s: %s", s.torch or "none", Signed(r.torch)))
 	print(string.format("  swimming %s, wetness %.2f: %s", s.swimming and "yes" or "no", wetness, Signed(r.wet)))
 	print(string.format("  fire underfoot %.2f: %s", s.burning, Signed(r.burn)))
 	print(string.format("  felt %s, target %s: %s%s", Signed(r.felt), Signed(r.target), band.word,
@@ -166,21 +185,44 @@ end
 local function PrintAuras()
 	Print("your buffs")
 	local IsSecret = ns.Sensors.IsSecret
+	local notes = ns.Sensors.fireAuraNotes
+	local function IsHidden(aura)
+		return IsSecret(aura) or (aura ~= nil and (IsSecret(aura.name) or IsSecret(aura.spellId)))
+	end
+	local count = 0
+	local function Line(aura, extra)
+		local note = notes[aura.spellId]
+		print(string.format("  %s (%d)%s%s", aura.name, aura.spellId, extra, note and " - " .. note or ""))
+		count = count + 1
+	end
+	local listed = {}
 	-- Modern clients allow more than 40 buffs; the cap only guards against a list that never ends.
 	for index = 1, MAX_AURAS do
 		local aura = C_UnitAuras.GetAuraDataByIndex("player", index, "HELPFUL")
-		if IsSecret(aura) or (aura ~= nil and (IsSecret(aura.name) or IsSecret(aura.spellId))) then
+		if IsHidden(aura) then
 			print("  hidden while auras are restricted (combat)")
 			return
 		end
 		if not aura then
-			if index == 1 then
-				print("  none")
-			end
-			return
+			break
 		end
-		print(string.format("  %s (%d)%s", aura.name, aura.spellId,
-			ns.Sensors.campfireSpells[aura.spellId] and " - counts as campfire" or ""))
+		listed[aura.spellId] = true
+		Line(aura, "")
+	end
+	-- Some fire auras are kept off the buff list by the game; asked by ID, the client may still give them.
+	local fireIDs = {}
+	for spellID in pairs(notes) do
+		fireIDs[#fireIDs + 1] = spellID
+	end
+	table.sort(fireIDs)
+	for _, spellID in ipairs(fireIDs) do
+		local aura = not listed[spellID] and C_UnitAuras.GetPlayerAuraBySpellID(spellID)
+		if aura and not IsHidden(aura) then
+			Line(aura, ", not in the buff list")
+		end
+	end
+	if count == 0 then
+		print("  none")
 	end
 end
 
@@ -188,12 +230,12 @@ local function PrintUsage()
 	Print("commands")
 	print("  /feels - open settings")
 	print("  /feels debug - print every factor of the current reading")
-	print("  /feels auras - list your buffs (stand by a fire to find its buff)")
+	print("  /feels auras - list your buffs (sit by a fire to find its buff)")
 	print("  /feels test <-100..100> - point the needle at a value for 30 s")
 	print("  /feels test sweep - move the needle across the whole scale")
 	print("  /feels test cozy - toggle the Cozy word for 30 s")
 	print("  /feels test off - back to real readings")
-	print("  /feels measure <frame> - where a frame sits by the minimap, and the gauge scale of its size")
+	print("  /feels measure <frame> - where a frame (name or path, like MinimapCluster.DielFrame) sits by the minimap, and the gauge scale of its size")
 end
 
 local function Test(arg)
@@ -217,9 +259,22 @@ end
 
 SLASH_FEELSLIKE1 = "/feels"
 SLASH_FEELSLIKE2 = "/feelslike"
--- Prints where a frame (by its global name, as /fstack shows it) sits by the minimap.
+-- A frame by its global name, or by a path of keys from a global frame ("MinimapCluster.DielFrame"):
+-- /fstack shows frames without a name of their own by an address that cannot be looked up.
+local function FindFrame(path)
+	local target = _G
+	for key in path:gmatch("[^.]+") do
+		if type(target) ~= "table" then
+			return nil
+		end
+		target = target[key]
+	end
+	return target
+end
+
+-- Prints where a frame (by its global name or path, as /fstack shows it) sits by the minimap.
 local function Measure(name)
-	local target = name and _G[name]
+	local target = name and FindFrame(name)
 	if type(target) ~= "table" or type(target.GetCenter) ~= "function" then
 		Print("no frame named " .. tostring(name) .. ". Hover it with /fstack to see its name.")
 		return

@@ -37,20 +37,33 @@ SEGMENT_GAP = 4.0  # degrees between segments
 SCALE_INNER, SCALE_OUTER = 31.0, 46.0
 
 # The ring is drawn as full circles under the face; the face covers everything inside FACE_RADIUS.
-RING_OUTER = 63.5
-RING_RIM = 1.8  # dark outer edge
+# Shaped after Forever's day/night button (measured in Forever screenshots, 2026-10-21): a thin metal
+# band and a dark outline around it. In that button's pixels, 18.9 to the outline's outer edge: band
+# from 15.2 to 17.3, then the outline.
+RING_OUTER = 63.5  # outer edge of the outline
+BAND_OUTER = 58.2  # outer edge of the band, where the outline starts
 FACE_RADIUS = 50.5
-FACE_RIM = 1.4  # dark inner edge of the ring, drawn as part of the face
-FACE_RIM_COLOR = "120E08"
+FACE_RIM = 1.4  # inner edge of the ring, drawn as part of the face
+FACE_RIM_COLOR = "1D2B42"  # the dark blue grey edge of the day/night button's disc
 
-# Ring palettes: outer rim, band, light. Light and shade are mixed into the band ahead of time.
-# Gold matches the minimap buttons on Retail; bronze matches the minimap ring of Forever (sampled from
-# Forever screenshots, 2026-10-21).
+# Around the band the color moves toward the light in a narrow spot at the upper left and toward the
+# shade in a wide, mild one at the lower right: weight cos(angle from the center) ** power. Fitted to
+# the day/night button's ring. One color per BAND_STEP degrees.
+LIGHT_ANGLE, LIGHT_POWER = 300.0, 3.0
+SHADE_ANGLE, SHADE_POWER = 150.0, 2.0
+BAND_STEP = 10.0
+
+# Ring palettes: outline, shade, band, light. Opaque colors only (see the docstring), so the outline is
+# one dark color: a little darker than dark grass, lighter than Blizzard's shadow over the bright map.
+# Gold matches the minimap buttons on Retail; bronze matches Forever's day/night button (fitted to its
+# colors around the ring); classic matches the minimap buttons of ClassicUI Forever in its default look
+# (their lit crest, band and shade).
 RINGS = {
-    "ring_gold": ("5C400D", "C99A2E", "F6D77E"),
-    "ring_bronze": ("38240F", "7E5933", "D2AA74"),
-    "ring_icy": ("2A4A5E", "8FBAD3", "E8F7FF"),
-    "ring_hot": ("5A1606", "D9602A", "FFB27A"),
+    "ring_gold": ("2B1F08", "986F22", "C99A2E", "F6D77E"),
+    "ring_bronze": ("201A0D", "5E4527", "77542C", "AB8D5B"),
+    "ring_classic": ("16140F", "665216", "7C6D24", "E4CA43"),
+    "ring_icy": ("14232C", "62879E", "8FBAD3", "E8F7FF"),
+    "ring_hot": ("2A0A03", "9F3D1B", "D9602A", "FFB27A"),
 }
 FACES = {"face": "0E1620", "face_cold": "163A55", "face_hot": "4A1A0E"}
 
@@ -113,13 +126,26 @@ def ring_of(outer, inner, color, cx=C, cy=C):
     return polygon(arc(0, 360, outer, cx, cy) + arc(360, 0, inner, cx, cy), color)
 
 
-def ring_layer(rim, band, light):
-    body = circle(C, C, RING_OUTER, rim)
-    body += circle(C, C, RING_OUTER - RING_RIM, band)
-    # Light from the top left, shade at the bottom right: reads as metal even at 40 px.
-    body += sector(250, 380, RING_OUTER - RING_RIM, FACE_RADIUS - 1, mix(band, light, 0.55))
-    body += sector(70, 200, RING_OUTER - RING_RIM, FACE_RADIUS - 1, mix(band, rim, 0.45))
-    body += sector(255, 375, RING_OUTER - 3.5, RING_OUTER - 6.0, light)
+def band_color(angle, shade, band, light):
+    """The band's color at angle (degrees clockwise from 12 o'clock)."""
+
+    def weight(center, power):
+        return max(0.0, math.cos(math.radians(angle - center))) ** power
+
+    return mix(mix(band, light, weight(LIGHT_ANGLE, LIGHT_POWER)), shade, weight(SHADE_ANGLE, SHADE_POWER))
+
+
+def ring_layer(outline, shade, band, light):
+    body = circle(C, C, RING_OUTER, outline)
+    body += circle(C, C, BAND_OUTER, band)
+    # Steps of color around the band, each a little wider than its share, so no seam shows between them.
+    # They reach under the face, so the band meets the face without a gap.
+    half = BAND_STEP / 2 + 0.5
+    for i in range(round(360 / BAND_STEP)):
+        angle = i * BAND_STEP
+        color = band_color(angle, shade, band, light)
+        if color != band:
+            body += sector(angle - half, angle + half, BAND_OUTER, FACE_RADIUS - 1, color)
     return svg(body)
 
 

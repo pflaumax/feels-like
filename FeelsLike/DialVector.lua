@@ -27,7 +27,8 @@ local function SetLayerAlpha(layer, alpha)
 	end
 end
 
--- Returns a dial: { name, Render(self, t), SetUnit(self, unit) }, or nil if SVG is not available.
+-- Returns a dial: { name, Render(self, t), SetUnit(self, unit), SetClassic(self, classic) }, or nil if SVG is
+-- not available.
 function DialVector.Create(frame)
 	if not frame.CreateVectorGraphics then
 		return nil
@@ -49,6 +50,21 @@ function DialVector.Create(frame)
 		end
 		return layer
 	end
+	-- The game sees only the files that were there when it started, so after an update a /reload may miss
+	-- art added since 0.1.0 until the game restarts. Such a layer is left out instead of the whole dial.
+	local function OptionalLayer(file, drawLayer, subLevel)
+		if failed then
+			return nil
+		end
+		local layer = frame:CreateVectorGraphics(nil, drawLayer, nil, subLevel)
+		layer:SetAllPoints(frame)
+		if not layer:SetSVG(MEDIA .. file) then
+			layer:Hide()
+			return nil
+		end
+		layers[#layers + 1] = layer
+		return layer
+	end
 
 	-- Bottom to top: ring (full circles), face over the ring's middle, scale, unit, needle.
 	local face = Layer("face.svg", "BORDER", 0)
@@ -60,8 +76,12 @@ function DialVector.Create(frame)
 	for step = 0, NEEDLE_STEPS do
 		needles[step] = Layer(string.format("Needle\\%02d.svg", step), "ARTWORK", 2)
 	end
-	-- The ring matches the minimap around it: bronze in Forever, gold like the Retail minimap buttons.
-	Layer(ns.Sensors.isForever and "ring_bronze.svg" or "ring_gold.svg", "BACKGROUND", 0)
+	-- The ring matches the minimap around it: bronze in Forever, gold like the Retail minimap buttons. A
+	-- classic-style minimap in Forever has classic buttons: both Forever rings are loaded, SetClassic shows one.
+	-- Both are newer than 0.1.0: without them gold stands in and the ring stays the same everywhere.
+	local ring = ns.Sensors.isForever and OptionalLayer("ring_bronze.svg", "BACKGROUND", 0)
+		or Layer("ring_gold.svg", "BACKGROUND", 0)
+	local ringClassic = ns.Sensors.isForever and OptionalLayer("ring_classic.svg", "BACKGROUND", 0) or nil
 	local ringIcy = Layer("ring_icy.svg", "BACKGROUND", 1)
 	local ringHot = Layer("ring_hot.svg", "BACKGROUND", 2)
 
@@ -82,6 +102,9 @@ function DialVector.Create(frame)
 	local shownCold, shownHot = 0, 0
 	for _, layer in ipairs({ faceCold, ringIcy, faceHot, ringHot }) do
 		SetLayerAlpha(layer, 0)
+	end
+	if ringClassic then
+		SetLayerAlpha(ringClassic, 0)
 	end
 
 	function dial:Render(t)
@@ -108,6 +131,14 @@ function DialVector.Create(frame)
 
 	function dial:SetUnit(unit)
 		unitGlyph:SetSVG(MEDIA .. (unit == "F" and "unit_f.svg" or "unit_c.svg"))
+	end
+
+	-- classic: the minimap is classic-style (Forever only; see Gauge).
+	function dial:SetClassic(classic)
+		if ringClassic then
+			SetLayerAlpha(ring, classic and 0 or 1)
+			SetLayerAlpha(ringClassic, classic and 1 or 0)
+		end
 	end
 
 	return dial

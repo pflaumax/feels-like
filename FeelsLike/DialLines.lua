@@ -103,5 +103,8 @@ function DialLines.Create(frame)
 		unitText:SetText(DEGREE .. (unit == "F" and "F" or "C"))
 	end
 
+	-- The built-in gold ring suits a classic-style minimap as well.
+	function dial:SetClassic() end
+
 	return dial
 end

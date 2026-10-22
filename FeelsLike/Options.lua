@@ -7,7 +7,7 @@ ns.Options = Options
 
 local SCALE_MIN = 0.3
 local SCALE_MAX = 2
-local SCALE_STEP = 0.05
+local SCALE_STEP = 0.01
 
 local function UnitOptions()
 	local container = Settings.CreateControlTextContainer()

@@ -16,13 +16,63 @@ local MAX_PARENT_STEPS = 10
 -- Every Cozy Fire aura in the game data (wago.tools SpellName, SpellEffect). A fire applies them to
 -- players around it for 60 s and renews them while they stay. 7353 is the Basic Campfire one.
 -- 458740 is also named Cozy Fire, but it is a dummy spell with no aura, so it is left out.
-local COZY_FIRE_SPELLS = { 7353, 7358, 223298, 432573 }
+-- 1232234 is Forever's: 3 s long, from its camp fires, 20 yd around. The game keeps it off the buff
+-- bar, and whether addons can read it is not known yet (/feels auras tells).
+local COZY_FIRE_SPELLS = { 7353, 7358, 223298, 432573, 1232234 }
 
--- For /feels auras.
-Sensors.campfireSpells = {}
+-- Forever's camps (Cooking builds the camp fire; wago.tools Spell, SpellInterrupts, 1.60.1.70532).
+-- Sitting by a camp fire puts Welcoming Campfire on you for 60 s, and moving takes it off. No fire
+-- renews it, so its timer says nothing about leaving: while it is on, you sit by a fire. After the 60 s
+-- it turns into Camp Benefits, an hour of buffs that goes wherever you go, so that one tells nothing
+-- about the fire. A camp fire without other camp objects gives no benefits at all.
+local WELCOMING_CAMPFIRE_SPELLS = { 1229739, 1289723 }
+local CAMP_BENEFITS = 1229741
+-- Within 100 yd of a camp fire: too far to warm you, but once seen by your seat, its end means the
+-- fire went out (or you went far).
+local CAMPFIRE_NEARBY = 1283391
+local CAMPFIRE_HIDDEN = 1229736 -- hidden, 15 yd around a camp fire, taken off by moving; use not known
+-- Once you sat down by a camp fire, you may stand up and walk around it: the warmth stays while you stay
+-- near where you sat, for as long as a camp fire burns at most (Forever's Basic Campfire: 15 min).
+local CAMP_FIRE_LIFETIME = 15 * 60
+
+-- Torches. Forever's Night Watchman's Torch (a toy from Duskwood) puts a lit torch in your hand for
+-- 5 min, and combat and water put it out (wago.tools Spell, SpellInterrupts, 1.60.1.70532). 1309410 is
+-- the holder's buff; 1321139, hidden, lights up the allies around the holder.
+local TORCH_SPELLS = { 1309410, 1321139 }
+-- Lit torches you can hold in a hand (wago.tools ItemSparse, 1.60.1.70532). Burnt Out Torch and Torch of
+-- the Dormant Flame are not lit, so they are left out.
+local TORCH_ITEMS = {
+	[1172] = true, -- Grayson's Torch
+	[2410] = true, -- Smoky Torch
+	[2808] = true, -- Torch of Flame
+	[6182] = true, -- Dim Torch
+	[6654] = true, -- Torch of the Eternal Flame
+	[7344] = true, -- Torch of Holy Flame
+	[10515] = true, -- Torch of Retribution
+}
+local HAND_SLOTS = { 16, 17 } -- main hand, off hand
+
+local CAMPFIRE_SPELLS = {}
+local sittingSpells = {}
 for _, spellID in ipairs(COZY_FIRE_SPELLS) do
-	Sensors.campfireSpells[spellID] = true
+	CAMPFIRE_SPELLS[#CAMPFIRE_SPELLS + 1] = spellID
 end
+for _, spellID in ipairs(WELCOMING_CAMPFIRE_SPELLS) do
+	CAMPFIRE_SPELLS[#CAMPFIRE_SPELLS + 1] = spellID
+	sittingSpells[spellID] = true
+end
+
+-- For /feels auras: every fire aura the addon knows, and what it does with it.
+Sensors.fireAuraNotes = {}
+for _, spellID in ipairs(CAMPFIRE_SPELLS) do
+	Sensors.fireAuraNotes[spellID] = "counts as campfire"
+end
+for _, spellID in ipairs(TORCH_SPELLS) do
+	Sensors.fireAuraNotes[spellID] = "counts as a torch"
+end
+Sensors.fireAuraNotes[CAMP_BENEFITS] = "camp buffs, not counted"
+Sensors.fireAuraNotes[CAMPFIRE_NEARBY] = "camp fire nearby: its end ends the warmth where you sat"
+Sensors.fireAuraNotes[CAMPFIRE_HIDDEN] = "camp fire, not counted"
 
 local weatherKinds = {}
 if Enum and Enum.WeatherType then
@@ -69,6 +119,7 @@ local campfireAuraUpdatedAt
 -- of that is a fire here.
 local campfireLoadedAt
 local LOADING_SETTLE = 5 -- seconds; the aura missing this soon after loading is the client catching up
+local campSeat -- { auraID, satAt, fireSeen }: the Welcoming Campfire you sat with
 
 -- Fire underfoot. Fire damage taken outside combat; ignored for a while after combat, when fire DoTs
 -- from the fight still tick.
@@ -185,6 +236,7 @@ local function LeaveFire()
 	ForgetBeat()
 	campfireAnchor, campfireAnchorSettled, campfireLeftAt = nil, nil, nil
 	campfireAuraUpdatedAt = nil
+	campSeat = nil
 end
 
 local function ForgetCampfire(now)
@@ -266,13 +318,48 @@ local function DistanceNearness(now, auraID, renewed, timed)
 	return ns.Model.CampfireDistanceNearness(campfireLeftAt and now - campfireLeftAt), distance
 end
 
+-- Sitting by a camp fire (Welcoming Campfire on): by the fire while it is on and you stay near.
+local function SittingNearness(now, aura)
+	if not campSeat or campSeat.auraID ~= aura.auraInstanceID then
+		campSeat = { auraID = aura.auraInstanceID, satAt = now }
+	end
+	local nearby = C_UnitAuras.GetPlayerAuraBySpellID(CAMPFIRE_NEARBY)
+	if not IsSecretAura(nearby) and nearby then
+		campSeat.fireSeen = true
+	end
+	-- Put on after the last loading screen: you sit by a fire here, so the wait for a renewal ends.
+	local satHere = HasTimer(aura) and campfireLoadedAt ~= nil and aura.expirationTime - aura.duration > campfireLoadedAt
+	return DistanceNearness(now, aura.auraInstanceID, satHere, false)
+end
+
+-- Welcoming Campfire is gone: moving took it off, or its minute turned into Camp Benefits. Still by the
+-- fire while you stay near where you sat, until the fire burns out: Campfire Nearby ends, if it was seen
+-- there, and at most CAMP_FIRE_LIFETIME after you sat down. Returns nearness and distance (nil when
+-- unknown), or nothing when the seat no longer counts.
+local function StayedNearness(now)
+	if not campSeat then
+		return nil
+	end
+	local nearby = C_UnitAuras.GetPlayerAuraBySpellID(CAMPFIRE_NEARBY)
+	local fireOut = campSeat.fireSeen and not IsSecretAura(nearby) and not nearby
+	if fireOut or now - campSeat.satAt > CAMP_FIRE_LIFETIME or not PlayerPosition() then
+		campSeat = nil
+		return nil
+	end
+	local nearness, distance = DistanceNearness(now, campfireAuraID, false, false)
+	if nearness == 0 then
+		campSeat = nil -- walked away: no warmth from this seat until you sit by a fire again
+	end
+	return nearness, distance
+end
+
 -- Returns nearness 0..1, seconds since renewal (nil without a timer), measured gap (or nil),
--- distance from where you stood by the fire (nil when unknown).
+-- distance from where you stood by the fire (nil when unknown), and "sitting" or "stayed" by a camp fire.
 -- While aura data is secret (combat), assume no renewal since the last one seen, so warmth still fades.
 local function CampfireNearness()
 	local now = GetTime()
-	local timed, renewedAt, untimed
-	for _, spellID in ipairs(COZY_FIRE_SPELLS) do
+	local timed, renewedAt, untimed, sitting
+	for _, spellID in ipairs(CAMPFIRE_SPELLS) do
 		local aura = C_UnitAuras.GetPlayerAuraBySpellID(spellID)
 		if IsSecretAura(aura) then
 			if not campfireAnchor and not campfireRenewedAt then
@@ -287,7 +374,9 @@ local function CampfireNearness()
 			return math.min(fresh, distanceNearness), since, campfireRenewalGap, distance
 		end
 		if aura then
-			if HasTimer(aura) then
+			if sittingSpells[spellID] then
+				sitting = aura
+			elseif HasTimer(aura) then
 				local at = aura.expirationTime - aura.duration
 				if not renewedAt or at > renewedAt then
 					timed, renewedAt = aura, at
@@ -298,10 +387,20 @@ local function CampfireNearness()
 		end
 	end
 
+	if sitting then
+		local nearness, distance = SittingNearness(now, sitting)
+		return nearness, nil, nil, distance, "sitting"
+	end
 	if not timed and not untimed then
+		local nearness, distance = StayedNearness(now)
+		if nearness then
+			return nearness, nil, nil, distance, "stayed"
+		end
 		ForgetCampfire(now)
 		return 0
 	end
+	-- A fire's own aura tells better than an earlier seat by a camp fire: it ends when the fire goes out.
+	campSeat = nil
 
 	-- Freshness (timed auras only; without a timer there is nothing to measure).
 	local fresh, since, gap, renewed = 1, nil, nil, false
@@ -342,6 +441,23 @@ local function CampfireNearness()
 	local aura = timed or untimed
 	local distanceNearness, distance = DistanceNearness(now, aura.auraInstanceID, renewed, timed ~= nil)
 	return math.min(fresh, distanceNearness), since, gap, distance
+end
+
+-- Where the light of a torch comes from, for /feels debug: "in hand" (the toy or a torch item), "from an
+-- ally's torch", or nil without one.
+local function TorchLight()
+	for _, slot in ipairs(HAND_SLOTS) do
+		if TORCH_ITEMS[GetInventoryItemID("player", slot)] then
+			return "in hand"
+		end
+	end
+	for _, spellID in ipairs(TORCH_SPELLS) do
+		local aura = C_UnitAuras.GetPlayerAuraBySpellID(spellID)
+		if not IsSecretAura(aura) and aura then
+			return spellID == TORCH_SPELLS[1] and "in hand" or "from an ally's torch"
+		end
+	end
+	return nil
 end
 
 -- UNIT_AURA for the player: notes when the game renews the campfire aura.
@@ -426,8 +542,10 @@ function Sensors.Read()
 	state.shelter = ns.Model.SettleShelter(shelterMemory, rawShelter, GetTime())
 	state.indoors = state.shelter ~= "outdoors"
 	state.inn = state.shelter == "inn"
-	state.campfire, state.campfireSince, state.campfireGap, state.campfireDistance = CampfireNearness()
+	state.campfire, state.campfireSince, state.campfireGap, state.campfireDistance, state.campfireCamp =
+		CampfireNearness()
 	state.swimming = IsSwimming()
+	state.torch = TorchLight()
 	state.burning = ns.Model.Burning(lastFireHit and GetTime() - lastFireHit, state.swimming)
 	return state
 end
