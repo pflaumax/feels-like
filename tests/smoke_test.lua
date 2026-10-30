@@ -1,6 +1,4 @@
--- Loads the whole addon against stubbed WoW API and runs a few scenarios.
--- It catches runtime errors and wrong wiring; it does not prove anything about rendering.
--- Run from the project root: luajit tests/smoke_test.lua
+-- Loads the addon with a fake WoW API and runs scenarios. Run with luajit tests/smoke_test.lua
 
 local failures = 0
 local function check(name, condition, detail)
@@ -10,15 +8,13 @@ local function check(name, condition, detail)
 	end
 end
 
--- Font strings by template, so tests can find the label; every frame CreateFrame made;
--- VectorGraphics layers in creation order. svg.supported and svg.result control the SVG stubs; files named
--- in svg.missing fail to load, like art added after the game started.
+-- Things the fake API records.
 local fontStrings = {}
 local createdFrames = {}
 local vectorLayers = {}
 local svg = { supported = true, result = true, missing = {} }
 
--- Generic widget: any unknown method is a no-op. Scripts, points, visibility and mouse state are kept.
+-- Generic widget. Unknown methods do nothing.
 local function Widget()
 	local widget = { scripts = {}, scale = 1, shown = true }
 	widget.SetScript = function(self, name, fn) self.scripts[name] = fn end
@@ -45,7 +41,7 @@ local function Widget()
 	widget.GetWidth = function() return 198 end
 	widget.SetAlpha = function(self, alpha) self.alpha = alpha end
 	widget.SetSVG = function(self, path) self.svg = path return svg.result and not svg.missing[path:match("[^\\]+$")] end
-	-- false, not nil: the metatable would turn a missing method into a no-op function.
+	-- false, not nil, so the method is really missing.
 	widget.CreateVectorGraphics = svg.supported and function()
 		local layer = Widget()
 		vectorLayers[#vectorLayers + 1] = layer
@@ -58,20 +54,20 @@ local function Widget()
 	return setmetatable(widget, { __index = function() return function() end end })
 end
 
--- World state the stubs read. Scenarios change it.
+-- Fake world state.
 local world
 
 local function ResetWorld()
 	world = {
 		mapID = 1426, zoneText = "Dun Morogh", subzoneText = "",
 		instance = { "Dun Morogh", "none", 0, "", 0, 0, false, 0 },
-		hour = 5, minute = 0, -- the coldest hour
+		hour = 5, minute = 0, -- coldest hour
 		weather = { type = 2, intensity = 1 },
 		indoors = false, resting = false, swimming = false,
 		auras = {},
 		time = 1000, combat = false,
 		pos = { x = 0, y = 0, map = 0 }, speed = 0,
-		hands = {}, -- item IDs by inventory slot
+		hands = {}, -- item IDs by slot
 	}
 end
 ResetWorld()
@@ -187,8 +183,7 @@ local function InstallGlobals(forever)
 	return settings
 end
 
--- Loads every file listed in the TOC, in order, with a fresh namespace.
--- saved: the FeelsLikeDB the game loads from disk (nil: a new install).
+-- Loads every file in the TOC.
 local function LoadAddon(forever, saved)
 	ResetWorld()
 	_G.FeelsLikeDB = saved
@@ -214,14 +209,14 @@ local function Tick(seconds)
 	end
 end
 
--- Runs the timers that are due now (C_Timer.After(0, ...) runs on the next frame).
+-- Runs timers that are due.
 local function NextFrame()
 	local pending = timers
 	timers = {}
 	for _, fn in ipairs(pending) do fn() end
 end
 
--- The Core event frame is the one listening to UNIT_COMBAT.
+-- The Core event frame.
 local function CoreEvent(event, ...)
 	for _, frame in ipairs(createdFrames) do
 		if frame.events.UNIT_COMBAT then
@@ -232,7 +227,7 @@ local function CoreEvent(event, ...)
 	return false
 end
 
--- Fire damage to the player, then the next frame, where Core confirms it outside combat.
+-- Fire damage, then the next frame.
 local function FireHit(schoolMask)
 	local delivered = CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 120, schoolMask or 4)
 	NextFrame()
@@ -245,7 +240,7 @@ local function Slash(text)
 	return table.concat(printed, "\n")
 end
 
--- Forever client ---------------------------------------------------------------
+-- Forever client
 
 local ns, settings = LoadAddon(true)
 local Gauge = ns.Gauge
@@ -272,7 +267,7 @@ end
 local unitLayer, ringIcy, faceHot = LayerBySvg("unit_c.svg"), LayerBySvg("ring_icy.svg"), LayerBySvg("face_hot.svg")
 check("needles loaded once, one visible", #VisibleNeedles() == 1, table.concat(VisibleNeedles(), ","))
 check("svg path", vectorLayers[1].svg == "Interface\\AddOns\\FeelsLike\\Media\\face.svg", vectorLayers[1].svg)
--- Every SVG the dial loads exists on disk, so NEEDLE_STEPS matches the generated needle files.
+-- Every SVG the dial loads exists.
 for _, layer in ipairs(vectorLayers) do
 	local path = layer.svg:gsub("^Interface\\AddOns\\", ""):gsub("\\", "/")
 	local file = io.open(path)
@@ -284,11 +279,11 @@ end
 check("defaults saved", FeelsLikeDB.unit == "C" and FeelsLikeDB.label == "hover" and FeelsLikeDB.locked == false and FeelsLikeDB.scale == 0.53)
 check("one ticker", #tickers == 1, #tickers)
 
--- Dun Morogh, 05:00, full snow, outdoors: -60 - 8 - 20 = -88.
+-- Dun Morogh before dawn in snow.
 check("dun morogh night snow", math.abs(Gauge.target - (-88)) < 0.01, Gauge.target)
 check("dun morogh word", ns.Model.Band(Gauge.target, Gauge.cozy).word == "Freezing")
 
--- The needle glides through OnUpdate and swaps to the matching pre-rotated SVG (-88 is step 5).
+-- The needle moves to the matching SVG.
 local gaugeFrame = _G.FeelsLikeGauge
 local needleFiles = {}
 for _, layer in ipairs(vectorLayers) do
@@ -299,7 +294,7 @@ end
 local alwaysOneNeedle, filesNeverReloaded = true, true
 for _ = 1, 60 do
 	local onUpdate = gaugeFrame.scripts.OnUpdate
-	if not onUpdate then break end -- the gauge removes it once the needle settles
+	if not onUpdate then break end -- removed once the needle settles
 	onUpdate(gaugeFrame, 0.05)
 	alwaysOneNeedle = alwaysOneNeedle and #VisibleNeedles() == 1
 	for layer, file in pairs(needleFiles) do
@@ -325,15 +320,14 @@ check("debug shows place", debugText:find("Dun Morogh (map 1426)", 1, true), deb
 check("debug shows game day/night", debugText:find("(game: night)", 1, true), debugText)
 check("debug shows renderer", debugText:find("renderer: vector", 1, true), debugText)
 check("debug shows position", debugText:find("position: default", 1, true), debugText)
--- 50 px left of and 50 px below the minimap center: 225 degrees, 70.7 / 99 = 0.71 of the radius.
+-- A point next to the minimap.
 local gaugeForPosition = _G.FeelsLikeGauge
 gaugeForPosition.GetCenter = function() return 450, 250 end
 check("position angle and distance", ns.Gauge:DescribePosition():find("225 degrees from 12 o'clock, 0.71 of the minimap radius", 1, true),
 	ns.Gauge:DescribePosition())
 gaugeForPosition.GetCenter = function() return 500, 300 end
 
--- Forever's default place: the mirror image of the day/night button, which Blizzard anchors 55 right and
--- 86 up from the minimap center; offsets divided by Forever's 0.53 scale. The ring is bronze, like Forever's minimap.
+-- Forever default place and bronze ring.
 local gauge = _G.FeelsLikeGauge
 local point = gauge.point
 local expectedX = -55 / 0.53
@@ -348,8 +342,7 @@ local function RingsShown()
 end
 check("bronze ring shown by Blizzard's minimap", ringBronze.alpha == 1 and ringClassic.alpha == 0, RingsShown())
 
--- A classic-style minimap (ClassicUI Forever) is 140 wide. Once the minimap takes that size, the gauge goes
--- under its ring, 55 left of and 90 below its center, and wears the classic buttons' ring.
+-- Classic minimap from ClassicUI Forever.
 _G.Minimap.GetWidth = function() return 140 end
 _G.Minimap.hooks.OnSizeChanged()
 point = gauge.point
@@ -358,19 +351,19 @@ check("classic minimap offset", point and point[2] == _G.Minimap and math.abs(po
 check("classic ring shown", ringClassic.alpha == 1 and ringBronze.alpha == 0, RingsShown())
 debugText = Slash("debug")
 check("debug names the classic-style minimap", debugText:find("position: default, classic-style minimap;", 1, true), debugText)
--- There the word goes left, away from the coordinates line under the map.
+-- The label goes left there.
 gauge.GetCenter = function() return 445, 210 end
 ns.Gauge:ApplyPosition()
 check("word left of the gauge under a classic minimap", fontStrings.GameFontHighlightSmall.point[1] == "RIGHT",
 	fontStrings.GameFontHighlightSmall.point[1])
 gauge.GetCenter = function() return 500, 300 end
--- A moved gauge stays where it was put, but its ring still follows the minimap.
+-- A moved gauge stays, but the ring follows the minimap.
 FeelsLikeDB.x, FeelsLikeDB.y = 100, 50
 ns.Gauge:ApplyPosition()
 check("moved gauge keeps its place by a classic minimap", gauge.point[2] == _G.UIParent and ringClassic.alpha == 1,
 	RingsShown())
 FeelsLikeDB.x, FeelsLikeDB.y = nil, nil
--- Back to Blizzard's minimap (the addon's minimap switched off): the mirror place and bronze again.
+-- Back to the Blizzard minimap.
 _G.Minimap.GetWidth = function() return 198 end
 _G.Minimap.hooks.OnSizeChanged()
 point = gauge.point
@@ -378,7 +371,7 @@ check("back to the mirror place", point and math.abs(point[4] - expectedX) < 0.0
 	point and (point[4] .. ", " .. point[5]))
 check("back to the bronze ring", ringBronze.alpha == 1 and ringClassic.alpha == 0, RingsShown())
 
--- The word sits on the side away from the minimap (the minimap is 198 wide, its center at 500, 300).
+-- The label sits away from the minimap.
 local wordLabel = fontStrings.GameFontHighlightSmall
 local function LabelSideAt(x, y)
 	gauge.GetCenter = function() return x, y end
@@ -390,7 +383,7 @@ check("word right of a gauge at the right", LabelSideAt(600, 300) == "LEFT", wor
 check("word above a gauge over the minimap", LabelSideAt(490, 410) == "BOTTOM", wordLabel.point[1])
 check("word below a gauge under the minimap", LabelSideAt(510, 190) == "TOP", wordLabel.point[1])
 check("word below a gauge far away", LabelSideAt(100, 900) == "TOP", wordLabel.point[1])
--- The minimap moves after the gauge was placed (another addon): the word follows when it shows.
+-- The minimap moves after placing.
 gauge.GetCenter = function() return 440, 390 end
 ns.Gauge:ApplyPosition()
 _G.Minimap.GetCenter = function() return 300, 390 end
@@ -401,14 +394,14 @@ _G.Minimap.GetCenter = function() return 500, 300 end
 gauge.GetCenter = function() return 500, 300 end
 ns.Gauge:ApplyPosition()
 
--- /feels measure: where a minimap button sits, by its case-sensitive frame name.
+-- /feels measure by frame name.
 _G.MoonButton = Widget()
-_G.MoonButton.GetCenter = function() return 554, 383 end -- 33 degrees, 1.00 radius
+_G.MoonButton.GetCenter = function() return 554, 383 end
 _G.MoonButton.GetWidth = function() return 36 end
 local measured = Slash("measure MoonButton")
 check("measure a frame", measured:find("MoonButton: 33 degrees from 12 o'clock, 1.00 of the minimap radius from its center, as wide as the gauge at scale 0.50", 1, true), measured)
 check("measure an unknown frame", Slash("measure NoSuchFrame"):find("no frame named NoSuchFrame", 1, true))
--- A frame without a global name, by its path from a named one (like MinimapCluster.DielFrame).
+-- A frame by path.
 _G.MoonCluster = { Moon = _G.MoonButton }
 measured = Slash("measure MoonCluster.Moon")
 check("measure a frame by path", measured:find("MoonCluster.Moon: 33 degrees from 12 o'clock", 1, true), measured)
@@ -416,7 +409,7 @@ check("measure an unknown path", Slash("measure MoonCluster.Sun"):find("no frame
 check("measure a path through a value", Slash("measure MoonCluster.Moon.GetWidth.x"):find("no frame named", 1, true))
 _G.MoonButton, _G.MoonCluster = nil, nil
 
--- The word: hidden until hover, then the current band word.
+-- The label shows on hover.
 local label = fontStrings.GameFontHighlightSmall
 check("label exists", label ~= nil)
 check("label hidden before hover", label.shown == false)
@@ -458,13 +451,13 @@ ns.Gauge:SetLocked(false)
 ns.Gauge:SetLabelMode("hover")
 check("mouse back on", gauge.mouse == true)
 
--- A plain drag (no Shift) saves nothing: the gauge stays on the minimap.
+-- A plain drag saves nothing.
 world.shift = false
 gauge.scripts.OnDragStart(gauge)
 gauge.scripts.OnDragStop(gauge)
 check("plain drag saves nothing", FeelsLikeDB.x == nil and gauge.point[2] == _G.Minimap)
 
--- Hovered, then the mouse is switched off (locked, no word): the hover state must not stick.
+-- Hover state does not stick when the mouse is off.
 gauge.scripts.OnEnter()
 FeelsLikeDB.locked, FeelsLikeDB.label = true, "never"
 ns.Gauge:SetLocked(true)
@@ -474,13 +467,13 @@ ns.Gauge:SetLocked(false)
 ns.Gauge:SetLabelMode("hover")
 check("hover does not stick", label.shown == false)
 
--- /feels auras lists buffs and marks campfire ones.
+-- /feels auras lists buffs.
 world.auras[7353] = { spellId = 7353 }
 world.auras[1459] = { spellId = 1459 }
 local aurasText = Slash("auras")
 check("auras lists buffs", aurasText:find("Aura 1459 (1459)", 1, true), aurasText)
 check("auras marks campfire", aurasText:find("Aura 7353 (7353) - counts as campfire", 1, true), aurasText)
-for id = 1, 44 do -- more than 40 buffs: the campfire one is 46th
+for id = 1, 44 do -- more than 40 buffs
 	world.auras[id] = { spellId = id }
 end
 check("auras lists past 40", Slash("auras"):find("(7353) - counts as campfire", 1, true))
@@ -491,15 +484,13 @@ aurasText = Slash("auras")
 check("a hidden fire aura alone is not none", not aurasText:find("none", 1, true) and aurasText:find("(1232234)", 1, true), aurasText)
 world.auras = {}
 
--- A map missing from the table and without a known parent counts as a neutral temperate zone.
+-- Unknown map is a neutral zone.
 world.mapID = 9999
 Tick(1)
--- 05:00, full snow: 0 - 30 (a temperate night) - 20.
+-- Snow at night.
 check("unknown map falls back to 0", math.abs(Gauge.target - (0 - 30 - 20)) < 0.01, Gauge.target)
 
--- Walking into the Westfall inn at 15:00, no weather. Outside: 10 + 10 = 20. A plain building would
--- be 15 + (20 - 15) * 0.4 = 17, the inn 22 + (20 - 22) * 0.1 = 21.8. The game reports indoors before
--- resting; the needle must not dip to the plain-building value on the way in.
+-- Walking into an inn.
 world.mapID, world.zoneText = 1436, "Westfall"
 world.hour, world.weather = 15, { type = 0, intensity = 0 }
 Tick(1)
@@ -507,7 +498,7 @@ local outside = Gauge.target
 check("westfall afternoon outside", math.abs(outside - 20) < 0.01, outside)
 local lowest = outside
 world.indoors = true
-for _ = 1, 2 do -- resting arrives two ticks after indoors
+for _ = 1, 2 do -- resting comes two ticks later
 	Tick(1)
 	lowest = math.min(lowest, Gauge.target)
 end
@@ -520,15 +511,14 @@ check("no dip at the inn door", lowest >= outside - 0.01, lowest)
 check("inn value", math.abs(Gauge.target - 21.8) < 0.01, Gauge.target)
 check("inn cozy", Gauge.cozy == true)
 
--- Capital city outdoors is a rest area but not an inn.
+-- A capital city is not an inn.
 world.indoors = false
 Tick(3)
 check("resting outdoors is not cozy", Gauge.cozy == false)
 world.resting = false
 Tick(3)
 
--- The Undercity is underground as a whole: indoors and resting everywhere, yet its own value counts,
--- not an inn.
+-- Undercity is fully inside.
 world.mapID, world.zoneText = 1458, "Undercity"
 world.indoors, world.resting = true, true
 Tick(3)
@@ -536,17 +526,15 @@ check("undercity keeps its own value", math.abs(Gauge.target - (-20)) < 0.01, Ga
 check("undercity is not cozy", Gauge.cozy == false)
 debugText = Slash("debug")
 check("debug says inside as a whole", debugText:find("inside as a whole, no shelter", 1, true), debugText)
--- Out through the city gate into Tirisfal at 15:00 (-15 + 10): the city's reading does not linger
--- for the shelter delay.
+-- Leaving the city.
 world.mapID, world.zoneText = 1420, "Tirisfal Glades"
 world.indoors, world.resting = false, false
 Tick(1)
 check("no inn reading after the undercity", Gauge.cozy == false and Gauge.target < 15, Gauge.target)
-Tick(2) -- the usual door delay, then outdoors
+Tick(2) -- door delay, then outdoors
 check("outdoors after the undercity", math.abs(Gauge.target - (-5)) < 0.01, Gauge.target)
 
--- A building that is not an inn (the Goldshire smithy): not colder than a mild afternoon outside,
--- warmer than the night outside. Elwynn at 15:00 is 15 outside.
+-- A building that is not an inn.
 world.mapID, world.zoneText = 1429, "Elwynn Forest"
 Tick(1)
 world.indoors = true
@@ -554,18 +542,18 @@ Tick(3)
 check("building on a mild afternoon", math.abs(Gauge.target - 15) < 0.01, Gauge.target)
 world.hour = 5
 Tick(1)
-check("building at night is warmer", math.abs(Gauge.target - (-1)) < 0.01, Gauge.target) -- outside -25
+check("building at night is warmer", math.abs(Gauge.target - (-1)) < 0.01, Gauge.target) -- cold night outside
 world.indoors, world.hour = false, 15
 Tick(3)
 
--- After a loading screen (hearth into an inn) the new place counts at once.
+-- After a loading screen the new place counts at once.
 world.indoors, world.resting = true, true
 CoreEvent("PLAYER_ENTERING_WORLD")
 check("hearth into inn counts at once", math.abs(Gauge.target - 21.3) < 0.01, Gauge.target)
 world.indoors, world.resting = false, false
 CoreEvent("PLAYER_ENTERING_WORLD")
 
--- Swimming in Tanaris at noon soaks, then clothes dry.
+-- Swimming soaks, then clothes dry.
 world.mapID, world.zoneText, world.hour = 1446, "Tanaris", 15
 world.swimming = true
 Tick(1)
@@ -576,12 +564,11 @@ world.swimming = false
 Tick(120)
 check("dried in the heat", math.abs(Gauge.target - 100) < 0.01, Gauge.target)
 
--- Soaked, then a 20 s loading screen into an inn. That time counts where you were (Elwynn at 15:00 is
--- 15, so clothes dry in 90 s): 1 - 20 / 90 = 0.78 left, not the inn's fast drying.
+-- Drying during a loading screen.
 world.mapID, world.zoneText = 1429, "Elwynn Forest"
 world.swimming = true
 Tick(2)
--- In the water on a mild afternoon: 15 - 0.5 * (15 + 100) = -42.5, Cold.
+-- In the water on a mild day.
 check("swimming on a mild day is cold", math.abs(Gauge.target - (-42.5)) < 0.01, Gauge.target)
 world.swimming = false
 Tick(1)
@@ -593,37 +580,35 @@ check("loading time dries where you were", debugText:find("wetness 0.78", 1, tru
 world.indoors, world.resting = false, false
 CoreEvent("PLAYER_ENTERING_WORLD")
 
--- Rain outdoors keeps clothes damp.
+-- Rain keeps clothes damp.
 world.mapID, world.zoneText, world.hour = 1429, "Elwynn Forest", 15
 world.weather = { type = 1, intensity = 1 }
 Tick(200)
--- 5 + 10 - 12 = 3 env; wetness settles at 0.4, which takes 0.4 * 0.5 of the 103 above -100: 3 - 20.6.
 check("rain keeps damp", math.abs(Gauge.target - (-17.6)) < 0.01, Gauge.target)
 
--- The loading screens above must be over for the campfire scenarios: more than 5 s without an aura.
+-- Wait out the loading screens first.
 Tick(6)
 
--- Campfire in Dun Morogh at noon: -60 + 7.07 - 20 (snow) + 35, outdoors.
+-- Campfire in Dun Morogh.
 world.weather = { type = 0, intensity = 0 }
 world.mapID, world.zoneText, world.hour = 1426, "Dun Morogh", 12
 world.auras[7353] = { spellId = 7353 }
 Tick(200)
 check("campfire warms", Gauge.target > -60 + 30, Gauge.target)
--- Walked away: the 60 s aura was last renewed 10 s ago, so its warmth is gone.
+-- Walked away from the fire.
 world.auras[7353] = { spellId = 7353, duration = 60, expirationTime = world.time + 50 }
 Tick(1)
 check("aging campfire aura gives no warmth", Gauge.target < -40, Gauge.target)
--- Straight into an inn with the aura still on: cozy, not hot.
+-- Into an inn with the aura on.
 world.auras[7353] = { spellId = 7353, duration = 60, expirationTime = world.time + 59 }
 world.indoors, world.resting = true, true
 Tick(3)
 check("inn with campfire aura is cozy", Gauge.cozy == true and Gauge.target < 33, Gauge.target)
 world.indoors, world.resting = false, false
 world.auras[7353] = nil
-Tick(3) -- the aura is gone: this fire is over; outdoors again
+Tick(3) -- aura gone, outdoors again
 
--- A fire that renews Cozy Fire every 6 s. Once the gap is measured, standing by it stays fully warm
--- between renewals, and walking away still cools down within the gap plus a few seconds.
+-- A fire with a 6 s beat.
 local function Renew()
 	world.auras[7353] = { spellId = 7353, duration = 60, expirationTime = world.time + 60 }
 end
@@ -636,15 +621,15 @@ for _ = 1, 3 do
 	Renew()
 	Tick(1)
 end
-Tick(5) -- 6 s after the last renewal
+Tick(5) -- 6 s after renewal
 check("slow fire stays fully warm", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
 debugText = Slash("debug")
 check("debug shows renewal gap", debugText:find("every 6.0 s", 1, true), debugText)
-Tick(6) -- 12 s after the last renewal, no renewal since
+Tick(6) -- 12 s after renewal
 check("slow fire cools within 12 s", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
--- Coming back after 12 s is not a 12 s beat: the measured gap stays 6 s.
+-- A late return is not a new beat.
 
--- In combat aura data is secret: warmth must still fade instead of holding the last value.
+-- In combat warmth still fades.
 Renew()
 Tick(1)
 check("by the fire again", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
@@ -653,58 +638,55 @@ local realIsSecret = _G.issecretvalue
 _G.issecretvalue = function(value) return type(value) == "table" and value.spellId == 7353 end
 for _ = 1, 13 do
 	Tick(1)
-	Renew() -- the fire keeps renewing, but the addon cannot see it
+	Renew() -- the addon cannot see renewals
 end
 check("secret aura does not linger", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 _G.issecretvalue = realIsSecret
--- A client may hide only the aura's fields, not the table: the same as a hidden aura.
+-- Hidden fields count as a hidden aura.
 Renew()
 Tick(1)
 check("by the fire before hidden fields", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
-_G.issecretvalue = function(value) return value == 60 end -- the aura's duration
+_G.issecretvalue = function(value) return value == 60 end -- aura duration
 for _ = 1, 13 do
 	Tick(1)
 	Renew()
 end
 check("secret aura fields do not linger", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
-_G.issecretvalue = function(value) return value == 7353 end -- the buff's spell ID
+_G.issecretvalue = function(value) return value == 7353 end -- buff spell ID
 check("auras with a secret spell ID", Slash("auras"):find("hidden while auras are restricted", 1, true))
 _G.issecretvalue = realIsSecret
 world.auras[7353] = nil
 Tick(1)
 check("gap forgotten once the aura is gone", not Slash("debug"):find("every", 1, true))
 
--- An aura without a timer (Retail gives addons none for Cozy Fire): freshness cannot tell, and the
--- aura stays up to a minute after you leave. Distance from where you stood by the fire decides.
+-- Aura without a timer, distance decides.
 world.pos, world.speed = { x = 100, y = 100, map = 0 }, 7
-world.auras[7353] = { spellId = 7353, auraInstanceID = 501 } -- appears at the edge of its reach
+world.auras[7353] = { spellId = 7353, auraInstanceID = 501 } -- aura starts at the edge
 Tick(1)
-world.pos, world.speed = { x = 108, y = 100, map = 0 }, 0 -- you stop by the fire
+world.pos, world.speed = { x = 108, y = 100, map = 0 }, 0 -- stop by the fire
 Tick(1)
 check("untimed aura by the fire", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
 debugText = Slash("debug")
 check("debug shows distance", debugText:find("0.0 yd from where you stood by it", 1, true), debugText)
-world.pos, world.speed = { x = 102, y = 100, map = 0 }, 7 -- around the fire, still within reach
+world.pos, world.speed = { x = 102, y = 100, map = 0 }, 7 -- still within reach
 Tick(1)
 check("moving around the fire stays warm", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
-world.pos = { x = 125, y = 100, map = 0 } -- 17 yd from where you stood: gone
+world.pos = { x = 125, y = 100, map = 0 } -- 17 yd away, gone
 Tick(1)
 Tick(5)
 check("walked away cools in seconds", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
-world.pos = {} -- the game hides the position (an instance): the fire you left stays left
+world.pos = {} -- position hidden
 Tick(1)
 check("hidden position keeps you away", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
-world.pos, world.speed = { x = 109, y = 101, map = 0 }, 0 -- back to the fire, aura still on
+world.pos, world.speed = { x = 109, y = 101, map = 0 }, 0 -- back to the fire
 Tick(1)
 check("back by the fire warms again", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
-world.pos = { x = 108, y = 100, map = 1 } -- hearth to another continent with the aura still on
+world.pos = { x = 108, y = 100, map = 1 } -- hearth away
 Tick(5)
 check("another map counts as gone", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 debugText = Slash("debug")
 check("debug says far", debugText:find("far from the fire", 1, true), debugText)
--- Hearth with the aura still on. The fire renewed the aura just before the loading screen, and after
--- it the client may renumber the aura or drop it for a moment: none of that is a fire at the
--- destination, and you arrive cold, not fading.
+-- Hearth with the aura on.
 world.pos = { x = 108, y = 100, map = 0 }
 Tick(1)
 check("by the fire before the hearth", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
@@ -712,7 +694,7 @@ CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 501 } })
 world.pos = { x = 900, y = 40, map = 0 }
 CoreEvent("PLAYER_ENTERING_WORLD")
 check("arrive away from the fire", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
-CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 501 } }) -- the client refreshing its aura data
+CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 501 } }) -- client refreshing aura data
 Tick(1)
 check("aura refresh after a loading screen is no renewal", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 world.auras[7353] = { spellId = 7353, auraInstanceID = 601 }
@@ -722,17 +704,16 @@ Tick(1)
 world.auras[7353] = { spellId = 7353, auraInstanceID = 602 }
 Tick(3)
 check("same aura after a loading screen is not a new fire", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
--- A fire here renews the aura on its next beat: now it warms.
+-- A fire here warms again.
 Tick(1)
 CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 602 } })
 Tick(1)
 check("a fire after the loading screen warms", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
--- A /reload (or a login) by the fire leaves you there.
+-- A reload by the fire.
 CoreEvent("PLAYER_ENTERING_WORLD", false, true)
 Tick(1)
 check("reload by the fire stays warm", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
--- The position hidden for a while, at a new fire (new aura). Once the position is back, that fire is
--- where you are, not the last fire's spot.
+-- Position hidden at a new fire.
 world.pos = {}
 world.auras[7353] = { spellId = 7353, auraInstanceID = 603 }
 Tick(1)
@@ -741,11 +722,11 @@ Tick(5)
 check("a fire found without a position anchors where you are", math.abs(Gauge.target - fullyWarm) < 0.01,
 	Gauge.target)
 
--- Into an instance (no position) and out again: a fire you sat by inside does not follow you out.
+-- Into an instance and out.
 world.pos = {}
 CoreEvent("PLAYER_ENTERING_WORLD")
 Tick(6)
-CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 603 } }) -- a fire inside renews it
+CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 603 } }) -- fire inside
 Tick(1)
 check("fire inside an instance warms", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
 world.pos = { x = 300, y = 300, map = 0 }
@@ -754,18 +735,16 @@ Tick(1)
 check("an instance fire stays behind", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 world.auras[7353] = nil
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
-Tick(6) -- the aura is gone, long enough after the loading screen
+Tick(6) -- aura gone
 
--- A new fire (new aura) anchors anew, even far from the last one.
+-- A new fire anchors anew.
 world.auras[7353] = { spellId = 7353, auraInstanceID = 777 }
 Tick(1)
 check("new fire warms where you are", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
 world.auras[7353] = nil
 Tick(1)
 
--- A timed aura (6 s beat), then a hearth. The client refreshing the aura's data afterwards (UNIT_AURA)
--- is no renewal: the timer tells. The first renewal where you arrive starts the beat afresh, so a gap
--- across the loading screen is never learned as a beat.
+-- Timed aura, then a hearth.
 local function Renew700()
 	world.auras[7353] = { spellId = 7353, auraInstanceID = 700, duration = 60, expirationTime = world.time + 60 }
 end
@@ -780,7 +759,7 @@ CoreEvent("PLAYER_ENTERING_WORLD")
 CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 700 } })
 Tick(1)
 check("aura refresh after a hearth is no renewal", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
-Renew700() -- a fire here, 2 s after the last renewal at the old one
+Renew700() -- a fire here
 Tick(1)
 check("first renewal after the hearth warms", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
 Tick(7)
@@ -791,8 +770,7 @@ world.auras[7353] = nil
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 Tick(6)
 
--- Two fires 15 yd apart, one aura without a timer. Fire B renews the same aura, and the game reports
--- that in UNIT_AURA: the anchor moves to fire B.
+-- Two fires 15 yd apart.
 world.auras[7353] = { spellId = 7353, auraInstanceID = 900 }
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 Tick(1)
@@ -804,7 +782,7 @@ Tick(1)
 check("second fire warms", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
 world.pos, world.speed = { x = 40, y = 0, map = 0 }, 7
 Tick(6)
-CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 12345 } }) -- some other aura
+CoreEvent("UNIT_AURA", "player", { updatedAuraInstanceIDs = { 12345 } }) -- other aura
 Tick(1)
 check("other aura updates do not count", math.abs(Gauge.target - awayFromFire) < 0.01, Gauge.target)
 local secretIsSecret = _G.issecretvalue
@@ -822,8 +800,7 @@ world.auras[7353] = nil
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 Tick(1)
 
--- Timed aura: away long enough to start over, then back at the fire from its other side,
--- 15 yd from where you stood before. The first renewal after the reset moves the anchor.
+-- Back at the fire from the other side.
 local function Renew950()
 	world.auras[7353] = { spellId = 7353, auraInstanceID = 950, duration = 60, expirationTime = world.time + 60 }
 end
@@ -840,18 +817,18 @@ Renew950()
 Tick(1)
 check("back at a timed fire after a reset warms", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
 
--- A slow fire (renews every 14 s): when it stops renewing, warmth fades instead of dropping at once.
+-- A slow fire fades smoothly.
 Tick(13)
 Renew950()
 Tick(1)
 check("14 s beat measured", Slash("debug"):find("every 14.0 s", 1, true))
-Tick(16) -- 17 s after the last renewal: hold 15.5 s, then 4 s of fading, so 62.5% warm
+Tick(16) -- 17 s after renewal
 check("slow fire fades, not drops", math.abs(Gauge.target - (awayFromFire + 35 * 0.625)) < 0.01, Gauge.target)
 world.auras[7353] = nil
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 Tick(1)
 
--- Away for more than 15 s while the aura still lasts: the next fire is measured from scratch.
+-- Away long enough, measure again.
 Renew()
 Tick(1)
 Tick(5)
@@ -865,8 +842,7 @@ check("long absence starts over", Slash("debug"):find("gap not measured yet", 1,
 world.auras[7353] = nil
 Tick(1)
 
--- From a 6 s fire to one nearby that renews the same aura every 14 s. One longer gap is a step away,
--- but the same gap again is the new beat: by the slow fire it stays fully warm between renewals.
+-- From a fast fire to a slow one.
 Renew()
 Tick(1)
 Tick(5)
@@ -878,12 +854,12 @@ for _ = 1, 3 do
 	Tick(1)
 end
 check("slower beat learned", Slash("debug"):find("every 14.0 s", 1, true))
-Tick(12) -- 13 s after the last renewal
+Tick(12) -- 13 s after renewal
 check("slow fire after a fast one stays warm", math.abs(Gauge.target - fullyWarm) < 0.01, Gauge.target)
 world.auras[7353] = nil
 Tick(1)
 
--- At the edge of a 6 s fire, missing every other renewal gives 12 s gaps: not a slower fire.
+-- Missed renewals at the edge.
 Renew()
 Tick(1)
 Tick(5)
@@ -895,7 +871,7 @@ for _ = 1, 2 do
 	Tick(1)
 end
 check("a multiple of the beat is not a new beat", Slash("debug"):find("every 6.0 s", 1, true))
--- Small jitter (6.4 s twice) does not stretch the beat either.
+-- Small jitter.
 for _ = 1, 2 do
 	Tick(5)
 	local lastRenewal = world.auras[7353].expirationTime - 60
@@ -903,7 +879,7 @@ for _ = 1, 2 do
 	Tick(1)
 end
 check("jitter does not stretch the beat", Slash("debug"):find("every 6.0 s", 1, true))
--- A real fire at twice the beat keeps coming: it is learned on the third 12 s gap.
+-- A real slower fire is learned.
 for _ = 1, 3 do
 	Tick(11)
 	local lastRenewal = world.auras[7353].expirationTime - 60
@@ -914,8 +890,7 @@ check("a slower fire at twice the beat is learned", Slash("debug"):find("every 1
 world.auras[7353] = nil
 Tick(1)
 
--- Forever's camp fire: sitting by it puts Welcoming Campfire on you for 60 s, and no fire renews it.
--- Westfall at 15:00 is 20 outside; a fire warms up to 45 at most: Warm and Cozy, not Hot.
+-- Forever camp fire.
 world.mapID, world.zoneText, world.hour = 1436, "Westfall", 15
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 Tick(1)
@@ -934,7 +909,7 @@ debugText = Slash("debug")
 check("debug says sitting by a camp fire", debugText:find("sitting by a camp fire", 1, true), debugText)
 Tick(20)
 check("welcoming campfire needs no renewal", math.abs(Gauge.target - 45) < 0.01, Gauge.target)
--- Standing up and stepping around the fire takes the buff off, but you are still by the fire.
+-- Stepping around the fire.
 world.auras[1289723] = nil
 world.pos, world.speed = { x = 3, y = 0, map = 0 }, 7
 Tick(1)
@@ -945,14 +920,13 @@ world.pos = { x = 17, y = 0, map = 0 }
 Tick(5)
 check("walking off the seat cools", math.abs(Gauge.target - 20) < 0.01, Gauge.target)
 check("off the seat is not cozy", Gauge.cozy == false)
--- Camp Benefits from that camp do not warm you anywhere else.
+-- Camp Benefits do not warm elsewhere.
 GotCampBenefits()
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 Tick(1)
 check("camp benefits alone do not warm", math.abs(Gauge.target - 20) < 0.01, Gauge.target)
 
--- Sitting through the minute: it turns into Camp Benefits (none at a bare fire, as here), and the
--- warmth stays while you stay near.
+-- Sitting through the minute.
 world.auras[1229741] = nil
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 SitAtCamp(1229739, 1101)
@@ -963,7 +937,7 @@ Tick(1)
 check("sat through the minute, still warm by the fire", math.abs(Gauge.target - 45) < 0.01, Gauge.target)
 debugText = Slash("debug")
 check("debug says you stayed where you sat", debugText:find("near where you sat", 1, true), debugText)
-world.pos, world.speed = { x = 6, y = 0, map = 0 }, 7 -- up and around the fire
+world.pos, world.speed = { x = 6, y = 0, map = 0 }, 7 -- around the fire
 Tick(1)
 check("around the camp fire stays warm", math.abs(Gauge.target - 45) < 0.01, Gauge.target)
 world.pos = { x = 17, y = 0, map = 0 }
@@ -973,19 +947,19 @@ world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 Tick(1)
 check("the seat warms no more once you left", math.abs(Gauge.target - 20) < 0.01, Gauge.target)
 
--- A camp fire burns out: the seat counts 15 min after you sat down at most.
+-- A camp fire burns out.
 SitAtCamp(1229739, 1102)
 Tick(1)
 Tick(59)
 world.auras[1229739] = nil
 GotCampBenefits()
 Tick(1)
-Tick(839) -- 899 s after sitting down
+Tick(839) -- 899 s after sitting
 check("seat still warm before the fire burns out", math.abs(Gauge.target - 45) < 0.01, Gauge.target)
 Tick(2)
 check("seat cold once the fire burned out", math.abs(Gauge.target - 20) < 0.01, Gauge.target)
 
--- Campfire Nearby seen by the seat: its end means the fire went out, long before 15 min.
+-- Campfire Nearby ends.
 world.auras[1283391] = { spellId = 1283391 }
 SitAtCamp(1229739, 1108)
 Tick(1)
@@ -998,7 +972,7 @@ Tick(1)
 check("fire out: Campfire Nearby gone", math.abs(Gauge.target - 20) < 0.01, Gauge.target)
 world.pos, world.speed = { x = 0, y = 0, map = 0 }, 0
 
--- Sitting down again starts the count anew: a fire put Welcoming Campfire on you, so it burns.
+-- Sitting again starts anew.
 SitAtCamp(1229739, 1106)
 Tick(1)
 Tick(59)
@@ -1008,15 +982,14 @@ SitAtCamp(1229739, 1107)
 Tick(1)
 Tick(59)
 world.auras[1229739] = nil
-Tick(400) -- 1060 s after the first seat, 460 s after the second
+Tick(400)
 check("sitting again counts from then", math.abs(Gauge.target - 45) < 0.01, Gauge.target)
 world.pos = { x = 30, y = 0, map = 0 }
 Tick(5)
 world.pos = { x = 0, y = 0, map = 0 }
 Tick(1)
 
--- A seat through a loading screen: nothing warms where you arrive. A camp fire there does, even
--- within the first seconds after loading.
+-- A seat through a loading screen.
 SitAtCamp(1229739, 1103)
 Tick(1)
 Tick(59)
@@ -1032,8 +1005,7 @@ check("a camp fire right after loading warms", math.abs(Gauge.target - 45) < 0.0
 world.auras[1229739] = nil
 Tick(1)
 
--- Forever's own Cozy Fire: 3 s long, renewed within 20 yd of a camp fire. It tells better than a seat:
--- once it is gone, the fire is out.
+-- Forever's own Cozy Fire.
 local function RenewCampCozy()
 	world.auras[1232234] = { spellId = 1232234, auraInstanceID = 1200, duration = 3, expirationTime = world.time + 3 }
 end
@@ -1052,7 +1024,7 @@ Tick(1)
 check("fire out, the seat does not warm", math.abs(Gauge.target - 20) < 0.01, Gauge.target)
 world.auras[1229741] = nil
 
--- /feels auras names the camp auras, and asks by ID for the ones the buff list leaves out.
+-- /feels auras with camp auras.
 world.auras[1229739] = { spellId = 1229739 }
 GotCampBenefits()
 world.auras[1232234] = { spellId = 1232234, name = "Cozy Fire", hidden = true }
@@ -1063,7 +1035,7 @@ check("auras finds a hidden fire aura", aurasText:find("Cozy Fire (1232234), not
 world.auras = {}
 Tick(1)
 
--- A torch in hand warms a little: Westfall at 05:00 is 10 - 30 = -20, with a torch -20 + 20 = 0.
+-- A torch warms a little.
 world.hour = 5
 Tick(1)
 check("westfall before dawn", math.abs(Gauge.target - (-20)) < 0.01, Gauge.target)
@@ -1071,7 +1043,7 @@ world.auras[1309410] = { spellId = 1309410, duration = 300, expirationTime = wor
 Tick(1)
 check("lit torch warms", math.abs(Gauge.target - 0) < 0.01, Gauge.target)
 world.auras[1309410] = nil
-world.auras[1321139] = { spellId = 1321139, hidden = true } -- an ally's torch lights you
+world.auras[1321139] = { spellId = 1321139, hidden = true } -- an ally's torch
 Tick(1)
 check("an ally's torch warms", math.abs(Gauge.target - 0) < 0.01, Gauge.target)
 check("debug names an ally's torch", Slash("debug"):find("torch from an ally's torch: +20.0", 1, true))
@@ -1085,10 +1057,10 @@ check("auras marks the torch", Slash("auras"):find("(1309410) - counts as a torc
 world.auras[1309410] = nil
 Tick(1)
 check("torch out", math.abs(Gauge.target - (-20)) < 0.01, Gauge.target)
-world.hands[17] = 1172 -- Grayson's Torch in the off hand
+world.hands[17] = 1172 -- Grayson's Torch
 Tick(1)
 check("torch held in the off hand warms", math.abs(Gauge.target - 0) < 0.01, Gauge.target)
-world.hands[17], world.hands[16] = 3675, 2808 -- Burnt Out Torch off hand, Torch of Flame main hand
+world.hands[17], world.hands[16] = 3675, 2808 -- unlit torch and lit torch
 Tick(1)
 check("torch held in the main hand warms", math.abs(Gauge.target - 0) < 0.01, Gauge.target)
 world.hands[16] = nil
@@ -1114,7 +1086,7 @@ Tick(1)
 check("subzone override", Gauge.target == 90, Gauge.target)
 world.subzoneText = ""
 
--- Fire underfoot: Dun Morogh at night, stepping into a campfire outside combat.
+-- Fire underfoot.
 world.mapID, world.zoneText, world.hour = 1426, "Dun Morogh", 3
 world.weather = { type = 0, intensity = 0 }
 Tick(200) -- dry off
@@ -1124,7 +1096,7 @@ check("fire hit is scorching at once", Gauge.target == 100, Gauge.target)
 debugText = Slash("debug")
 check("debug shows fire", debugText:find("fire underfoot 1.00", 1, true), debugText)
 Tick(2)
-FireHit() -- still standing in it
+FireHit() -- still in it
 Tick(2)
 check("standing in fire stays scorching", Gauge.target == 100, Gauge.target)
 Tick(3)
@@ -1132,7 +1104,7 @@ check("stepping out fades", Gauge.target > coldReading and Gauge.target < 100, G
 Tick(5)
 check("faded back", math.abs(Gauge.target - coldReading) < 0.01, Gauge.target)
 
--- Lava: you swim in it, but it burns instead of soaking.
+-- Lava burns instead of soaking.
 world.swimming = true
 FireHit()
 Tick(1)
@@ -1143,7 +1115,7 @@ world.swimming = false
 Tick(10)
 check("lava leaves you dry", math.abs(Gauge.target - coldReading) < 0.01, Gauge.target)
 
--- From the fire straight into a lake: the water puts the fire out and soaks you.
+-- Fire, then a lake.
 FireHit()
 world.swimming = true
 Tick(4)
@@ -1151,7 +1123,7 @@ check("water puts the fire out and soaks", Gauge.target < coldReading - 1, Gauge
 world.swimming = false
 Tick(200)
 
--- Not counted: physical damage, fire in combat, heals, zero amount, secret values.
+-- Not counted as fire.
 CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 120, 1)
 NextFrame()
 check("physical ignored", Gauge.target == coldReading, Gauge.target)
@@ -1163,7 +1135,7 @@ CoreEvent("UNIT_COMBAT", "player", "HEAL", "", 120, 4)
 CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 0, 4)
 NextFrame()
 check("heal and zero ignored", Gauge.target == coldReading, Gauge.target)
-FireHit(20) -- frostfire: fire bit set
+FireHit(20) -- frostfire
 check("mixed school with fire counts", Gauge.target == 100, Gauge.target)
 Tick(20)
 local realSecret = _G.issecretvalue
@@ -1172,12 +1144,12 @@ FireHit()
 _G.issecretvalue = realSecret
 check("secret values ignored", Gauge.target == coldReading, Gauge.target)
 
--- A fire mob's first hit arrives a frame before the combat flag: not fire underfoot.
+-- A fire mob's first hit.
 CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 120, 4)
 world.combat = true
 NextFrame()
 check("first hit of a fight ignored", Gauge.target == coldReading, Gauge.target)
--- Fire DoTs tick on after the fight ends: ignored for 15 s after combat.
+-- Fire DoTs after a fight.
 world.combat = false
 CoreEvent("PLAYER_REGEN_ENABLED")
 Tick(5)
@@ -1188,7 +1160,7 @@ FireHit()
 check("fire after the grace counts", Gauge.target == 100, Gauge.target)
 Tick(20)
 
--- A held test value ends by itself after 30 s.
+-- A test ends by itself.
 timers = {}
 Slash("test 42")
 check("held test", Gauge.target == 42, Gauge.target)
@@ -1198,7 +1170,7 @@ for _, fn in ipairs(pendingTimers) do fn() end
 check("test ends by itself", Gauge.target ~= 42, Gauge.target)
 check("test end is announced", table.concat(printed, "\n"):find("test ended", 1, true))
 
--- Test commands take over the gauge and give it back.
+-- Test commands.
 Slash("test 42")
 Tick(1)
 check("test value holds", Gauge.target == 42, Gauge.target)
@@ -1207,7 +1179,7 @@ check("test cozy", Gauge.cozy == true)
 Slash("test off")
 check("test off returns to reading", Gauge.target ~= 42 and Gauge.cozy == false, Gauge.target)
 local realReading = Gauge.target
-Slash("test cozy") -- with no test running, the needle stays on the real reading
+Slash("test cozy") -- no test running
 check("test cozy keeps the needle", Gauge.target == realReading and Gauge.cozy == true, Gauge.target)
 Slash("test off")
 Slash("test nan")
@@ -1231,7 +1203,7 @@ settings.FEELSLIKE_UNIT.callback(nil, "F")
 check("unit setting switches the glyph", unitLayer.svg:find("unit_f.svg", 1, true), unitLayer.svg)
 check("usage on unknown", Slash("nope"):find("/feels debug", 1, true))
 
--- Art added after 0.1.0, missing until the game restarts: gold stands in, no classic ring, still vector.
+-- Missing new art.
 svg.missing = { ["ring_bronze.svg"] = true, ["ring_classic.svg"] = true }
 ns = LoadAddon(true)
 svg.missing = {}
@@ -1251,7 +1223,7 @@ _G.Minimap.hooks.OnSizeChanged()
 check("no classic ring, no error", goldShown and ns.Gauge.renderer == "vector")
 _G.Minimap.GetWidth = nil
 
--- 0.1.0 saved its default scale (0.45) as if chosen: in Forever it moves to the new default once.
+-- Old saved scale.
 ns = LoadAddon(true, { scale = 0.45, unit = "F" })
 check("old default scale moves to the new one", FeelsLikeDB.scale == 0.53 and FeelsLikeDB.version == 2, FeelsLikeDB.scale)
 check("other saved settings stay", FeelsLikeDB.unit == "F")
@@ -1262,7 +1234,7 @@ check("0.45 chosen after the move stays", FeelsLikeDB.scale == 0.45, FeelsLikeDB
 ns = LoadAddon(false, { scale = 0.45 })
 check("retail keeps 0.45", FeelsLikeDB.scale == 0.45, FeelsLikeDB.scale)
 
--- SVG files that fail to load fall back to the line dial ------------------------
+-- Line dial when SVG fails
 
 svg.result = false
 ns = LoadAddon(true)
@@ -1273,7 +1245,7 @@ for _, layer in ipairs(vectorLayers) do
 	check("failed svg layer hidden", layer.shown == false)
 end
 
--- Retail client without C_Weather and without SVG ---------------------------------
+-- Retail client without weather and SVG
 
 svg.supported = false
 ns = LoadAddon(false)
@@ -1281,11 +1253,11 @@ svg.supported = true
 check("no svg support uses lines", ns.Gauge.renderer == "lines", ns.Gauge.renderer)
 check("retail detected", not ns.Sensors.isForever)
 check("retail default scale", FeelsLikeDB.scale == 0.45, FeelsLikeDB.scale)
--- Retail's default place: below the minimap at 158 degrees, 1.66 radii out.
+-- Retail default place.
 local retailPoint = _G.FeelsLikeGauge.point
 check("retail minimap offset", retailPoint and math.abs(retailPoint[4] - 198 / 2 * 1.66 * math.sin(math.rad(158)) / 0.45) < 0.01,
 	retailPoint and retailPoint[4])
--- Retail's place was picked by a classic-style minimap already: a 140-wide one keeps it.
+-- Classic minimap on Retail.
 _G.Minimap.GetWidth = function() return 140 end
 _G.Minimap.hooks.OnSizeChanged()
 retailPoint = _G.FeelsLikeGauge.point
@@ -1295,7 +1267,7 @@ check("retail debug does not name a classic minimap", not Slash("debug"):find("c
 _G.Minimap.GetWidth = function() return 198 end
 world.mapID, world.zoneText, world.hour = 27, "Dun Morogh", 5
 Tick(1)
--- No weather: -60 - 8 = -68.
+-- No weather.
 check("retail dun morogh", math.abs(ns.Gauge.target - (-68)) < 0.01, ns.Gauge.target)
 debugText = Slash("debug")
 check("retail debug says no weather", debugText:find("no C_Weather", 1, true), debugText)

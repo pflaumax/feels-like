@@ -1,5 +1,4 @@
--- The gauge frame: size, place, dragging, the needle's smooth movement and the word next to it.
--- Drawing is done by a dial: DialVector (SVG, sharp at any scale) or, on older clients, DialLines.
+-- The gauge frame with its size, place, dragging, needle movement and label.
 
 local _, ns = ...
 local Model = ns.Model
@@ -7,30 +6,23 @@ local Model = ns.Model
 local Gauge = {}
 ns.Gauge = Gauge
 
-local SIZE = 72 -- unscaled; the default scale is in ns.DEFAULTS
+local SIZE = 72 -- unscaled
 local LABEL_GAP = 1
--- Within this many minimap radii the word goes on the side away from the minimap (see PlaceLabel).
+-- Near the minimap the label goes on the far side.
 local LABEL_NEAR_MINIMAP = 2.5
 
--- Default place, in minimap radii so it stays in place whatever size the minimap has.
--- Forever: on the minimap ring, the mirror image of the day/night button. Blizzard anchors that button
--- 55 right and 86 up from the center of the 198-wide minimap (Blizzard_Minimap/Camelot/Diel.lua, 1.60.1).
--- Retail with the classic-style UI: just below the minimap, by the clock (picked in game, 2026-10-04,
--- /feels debug).
+-- Default place in minimap radii, so it fits any minimap size.
 local MINIMAP_ANGLE = ns.Sensors.isForever and 360 - math.deg(math.atan2(55, 86)) or 158
 local MINIMAP_DISTANCE = ns.Sensors.isForever and math.sqrt(55 * 55 + 86 * 86) / 99 or 1.66
--- Forever with a classic-style minimap: 140 wide like the 1.x one (ClassicUI Forever) instead of Blizzard's 198.
--- Its ring is full of buttons by default, so the gauge goes under it, by the clock: 55 left and 90 down from the
--- center, left of the coordinates line and clear of the addon buttons at 225 and 237 degrees (ClassicUI Forever
--- 0.36.0, Map/Minimap.lua and Map/MinimapButton.lua).
-local CLASSIC_MINIMAP_WIDTH = 170 -- a minimap narrower than this counts as classic-style
+-- Default place for a classic minimap, under it by the clock.
+local CLASSIC_MINIMAP_WIDTH = 170 -- narrower than this counts as classic
 local CLASSIC_ANGLE = 180 + math.deg(math.atan2(55, 90))
 local CLASSIC_DISTANCE = math.sqrt(55 * 55 + 90 * 90) / 70
--- Fallback when there is no minimap: bottom right, above the bag bar. Screen (UIParent) units.
+-- Fallback place when there is no minimap.
 local FALLBACK_X = -110
 local FALLBACK_Y = 140
 
--- Share of the remaining distance the needle covers per second.
+-- How fast the needle moves.
 local FOLLOW_SPEED = 4
 
 local frame, dial, label
@@ -42,8 +34,7 @@ Gauge.target = 0
 Gauge.display = 0
 Gauge.cozy = false
 
--- Where a frame's center is from the minimap's center, in screen pixels (each frame's coordinates are in
--- its own scale). Returns dx, dy and the minimap radius, or nil while either is not placed.
+-- Offset of a frame from the minimap center in screen pixels.
 local function OffsetFromMinimap(target)
 	if not Minimap then
 		return nil
@@ -57,13 +48,12 @@ local function OffsetFromMinimap(target)
 	return x * scale - mx * minimapScale, y * scale - my * minimapScale, Minimap:GetWidth() / 2 * minimapScale
 end
 
--- A classic-style minimap in Forever: the gauge has its own default place and ring there.
+-- True for a classic minimap in Forever.
 local function IsClassicMinimap()
 	return ns.Sensors.isForever and Minimap ~= nil and Minimap:GetWidth() < CLASSIC_MINIMAP_WIDTH
 end
 
--- The word goes on the side of the gauge away from the minimap, so it never covers the map: left or
--- right of a gauge beside the minimap, above or below one over or under it. Far from the minimap, below.
+-- The label goes on the side away from the minimap.
 local function PlaceLabel()
 	label:ClearAllPoints()
 	local dx, dy, radius = OffsetFromMinimap(frame)
@@ -93,12 +83,11 @@ local function UpdateLabel()
 	local band = Model.Band(Gauge.target, Gauge.cozy)
 	label:SetText(band.word)
 	label:SetTextColor(band.color[1], band.color[2], band.color[3])
-	PlaceLabel() -- the minimap may have moved since the gauge was placed
+	PlaceLabel() -- the minimap may have moved
 	label:Show()
 end
 
--- A locked gauge needs the mouse only to show the word on hover; otherwise clicks reach the minimap
--- below it. Without the mouse no OnLeave arrives, so drop the hover state here.
+-- A locked gauge only needs the mouse for the hover label.
 local function UpdateMouse()
 	local enabled = not db.locked or db.label == "hover"
 	frame:EnableMouse(enabled)
@@ -142,19 +131,19 @@ function Gauge:Create(savedVariables)
 	dial = ns.DialVector.Create(frame) or ns.DialLines.Create(frame)
 	Gauge.renderer = dial.name
 
-	-- The word lives in its own unscaled frame, so it stays readable when the gauge is small.
+	-- The label has its own frame so it stays readable at small sizes.
 	local labelFrame = CreateFrame("Frame", nil, UIParent)
 	labelFrame:SetFrameStrata(frame:GetFrameStrata())
 	label = labelFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 
-	-- Shift is required, so a click on the gauge never moves it by accident.
+	-- Shift is needed to move the gauge.
 	frame:SetScript("OnDragStart", function(self)
 		if not db.locked and IsShiftKeyDown() then
 			moving = true
 			self:StartMoving()
 		end
 	end)
-	-- Only a real move is saved: a plain drag must not detach the gauge from the minimap.
+	-- Only save a real move.
 	frame:SetScript("OnDragStop", function(self)
 		if not moving then
 			return
@@ -172,7 +161,7 @@ function Gauge:Create(savedVariables)
 		UpdateLabel()
 	end)
 
-	-- The minimap can change size or place after login (Edit Mode, or an addon making it classic-style).
+	-- The minimap can change size or place after login.
 	frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 	if C_EventUtils and C_EventUtils.IsEventValid("EDIT_MODE_LAYOUTS_UPDATED") then
 		frame:RegisterEvent("EDIT_MODE_LAYOUTS_UPDATED")
@@ -215,7 +204,7 @@ function Gauge:SetUnit(unit)
 	dial:SetUnit(unit)
 end
 
--- mode: "hover", "always" or "never".
+-- mode is hover, always or never.
 function Gauge:SetLabelMode(mode)
 	db.label = mode
 	UpdateLabel()
@@ -232,10 +221,10 @@ function Gauge:SetScale(scale)
 	self:ApplyPosition()
 end
 
--- Point offsets are in the frame's own scale, so divide screen offsets by it.
+-- Offsets are in the frame's own scale.
 function Gauge:ApplyPosition()
 	local classic = IsClassicMinimap()
-	dial:SetClassic(classic) -- the ring follows the minimap's buttons, wherever the gauge is
+	dial:SetClassic(classic) -- the ring follows the minimap buttons
 	local scale = frame:GetScale()
 	frame:ClearAllPoints()
 	if db.x and db.y then
@@ -251,8 +240,7 @@ function Gauge:ApplyPosition()
 	PlaceLabel()
 end
 
--- Where a frame sits by the minimap, and the gauge scale that would make the gauge as wide: to pick a
--- default place and size next to a minimap button (/feels measure <frame name>, /feels debug).
+-- Where a frame sits by the minimap, for /feels measure.
 function Gauge:Describe(target)
 	local dx, dy, radius = OffsetFromMinimap(target)
 	if not dx then
@@ -265,7 +253,7 @@ function Gauge:Describe(target)
 		angle, radius > 0 and distance / radius or 0, matchingScale)
 end
 
--- For /feels debug: where the gauge is, relative to the minimap, so a good spot can become the default.
+-- Where the gauge is, for /feels debug.
 function Gauge:DescribePosition()
 	local layout = IsClassicMinimap() and ", classic-style minimap" or ""
 	return (db.x and "moved" or "default") .. layout .. "; " .. self:Describe(frame)

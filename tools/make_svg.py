@@ -1,19 +1,9 @@
 # /// script
 # requires-python = ">=3.9"
 # ///
-"""Draws the gauge as SVG layers for the VectorGraphics renderer (WoW 12.1.0+, Forever 1.60.1).
+"""Draws the gauge SVG layers. Run with uv run tools/make_svg.py, add --check to only compare.
 
-Every layer shares one 128x128 view box, so the addon stacks them at the same size and place.
-
-The in-game SVG renderer is not a browser. Seen in game on 2026-10-04 (Retail 12.1.0): <circle>,
-<rect> and <polygon> draw; <path> with arcs draws nothing. So this file uses only those three
-elements, with opaque hex fills: arcs become polygons with a vertex every 2 degrees, the ring is a
-stack of circles under the face, and see-through effects are pre-mixed colors. check() enforces it.
-
-Writes FeelsLike/Media/*.svg and FeelsLike/Media/Needle/00.svg … 90.svg. The scale colors, the sweep
-and the needle count come from the addon's Lua files (see addon_constants.py).
-Run from the project root: uv run tools/make_svg.py
-With --check it writes nothing and fails if the files on disk differ from what it would write.
+The game draws only circle, rect and polygon with solid colors.
 """
 
 import glob
@@ -22,7 +12,7 @@ import os
 import re
 import sys
 
-# The shared module sits next to this script; PYTHONSAFEPATH would leave this folder off the path.
+# Import the shared module from this folder.
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from addon_constants import ROOT, needle_steps, segment_colors, sweep
 
@@ -36,28 +26,19 @@ SWEEP = float(sweep())
 SEGMENT_GAP = 4.0  # degrees between segments
 SCALE_INNER, SCALE_OUTER = 31.0, 46.0
 
-# The ring is drawn as full circles under the face; the face covers everything inside FACE_RADIUS.
-# Shaped after Forever's day/night button (measured in Forever screenshots, 2026-10-21): a thin metal
-# band and a dark outline around it. In that button's pixels, 18.9 to the outline's outer edge: band
-# from 15.2 to 17.3, then the outline.
+# Ring drawn as full circles under the face.
 RING_OUTER = 63.5  # outer edge of the outline
-BAND_OUTER = 58.2  # outer edge of the band, where the outline starts
+BAND_OUTER = 58.2  # outer edge of the band
 FACE_RADIUS = 50.5
 FACE_RIM = 1.4  # inner edge of the ring, drawn as part of the face
-FACE_RIM_COLOR = "1D2B42"  # the dark blue grey edge of the day/night button's disc
+FACE_RIM_COLOR = "1D2B42"  # dark edge of the face
 
-# Around the band the color moves toward the light in a narrow spot at the upper left and toward the
-# shade in a wide, mild one at the lower right: weight cos(angle from the center) ** power. Fitted to
-# the day/night button's ring. One color per BAND_STEP degrees.
+# Ring shading around the band.
 LIGHT_ANGLE, LIGHT_POWER = 300.0, 3.0
 SHADE_ANGLE, SHADE_POWER = 150.0, 2.0
 BAND_STEP = 10.0
 
-# Ring palettes: outline, shade, band, light. Opaque colors only (see the docstring), so the outline is
-# one dark color: a little darker than dark grass, lighter than Blizzard's shadow over the bright map.
-# Gold matches the minimap buttons on Retail; bronze matches Forever's day/night button (fitted to its
-# colors around the ring); classic matches the minimap buttons of ClassicUI Forever in its default look
-# (their lit crest, band and shade).
+# Ring colors.
 RINGS = {
     "ring_gold": ("2B1F08", "986F22", "C99A2E", "F6D77E"),
     "ring_bronze": ("201A0D", "5E4527", "77542C", "AB8D5B"),
@@ -68,9 +49,9 @@ RINGS = {
 FACES = {"face": "0E1620", "face_cold": "163A55", "face_hot": "4A1A0E"}
 
 NEEDLE_COLOR = "E8F6FF"
-NEEDLE_EDGE = "070B10"  # dark edge around the needle, for contrast on any face color
+NEEDLE_EDGE = "070B10"  # dark edge around the needle
 PIVOT_CENTER = "8EA3B5"
-NEEDLE_STEPS = needle_steps()  # 90: 91 files, 3 degrees apart
+NEEDLE_STEPS = needle_steps()  # 91 files, 3 degrees apart
 GLYPH_COLOR = "F2C94C"
 GLYPH_SHADOW = "05070A"
 
@@ -78,7 +59,7 @@ ALLOWED = {"svg", "circle", "rect", "polygon"}
 
 
 def mix(a, b, k):
-    """Hex color a moved toward b by k (0..1)."""
+    """Mixes color a toward b by k."""
     ca = [int(a[i : i + 2], 16) for i in (0, 2, 4)]
     cb = [int(b[i : i + 2], 16) for i in (0, 2, 4)]
     return "".join(f"{round(x + (y - x) * k):02X}" for x, y in zip(ca, cb))
@@ -91,13 +72,13 @@ def svg(body):
 
 
 def point(angle, radius, cx=C, cy=C):
-    """Angle in degrees clockwise from 12 o'clock; SVG y grows downward."""
+    """Point at an angle from 12 o'clock."""
     rad = math.radians(angle)
     return cx + radius * math.sin(rad), cy - radius * math.cos(rad)
 
 
 def arc(start, end, radius, cx=C, cy=C):
-    """Points along an arc from start to end degrees, both ends included."""
+    """Points along an arc."""
     count = max(2, math.ceil(abs(end - start) / ARC_STEP) + 1)
     return [point(start + (end - start) * i / (count - 1), radius, cx, cy) for i in range(count)]
 
@@ -116,18 +97,17 @@ def polygon(points, color):
 
 
 def sector(start, end, outer, inner, color, cx=C, cy=C):
-    """Band between two radii from start to end degrees, as one polygon."""
+    """Band between two radii as one polygon."""
     return polygon(arc(start, end, outer, cx, cy) + arc(end, start, inner, cx, cy), color)
 
 
 def ring_of(outer, inner, color, cx=C, cy=C):
-    """Full ring as one polygon: around the outer edge, then back around the inner edge.
-    The two edges meet along one zero-width seam, which leaves the hole open under any fill rule."""
+    """Full ring as one polygon."""
     return polygon(arc(0, 360, outer, cx, cy) + arc(360, 0, inner, cx, cy), color)
 
 
 def band_color(angle, shade, band, light):
-    """The band's color at angle (degrees clockwise from 12 o'clock)."""
+    """Band color at an angle."""
 
     def weight(center, power):
         return max(0.0, math.cos(math.radians(angle - center))) ** power
@@ -138,8 +118,7 @@ def band_color(angle, shade, band, light):
 def ring_layer(outline, shade, band, light):
     body = circle(C, C, RING_OUTER, outline)
     body += circle(C, C, BAND_OUTER, band)
-    # Steps of color around the band, each a little wider than its share, so no seam shows between them.
-    # They reach under the face, so the band meets the face without a gap.
+    # Color steps around the band.
     half = BAND_STEP / 2 + 0.5
     for i in range(round(360 / BAND_STEP)):
         angle = i * BAND_STEP
@@ -162,7 +141,7 @@ def scale_layer():
     return svg(body)
 
 
-# Unit glyphs: geometric shapes, bold enough for 10 px.
+# Unit letters.
 GLYPH_Y = 91.0  # center of the letter
 GLYPH_H = 24.0  # cap height of C and F
 STROKE = 5.2
@@ -174,7 +153,7 @@ def degree(x, y, color):
 
 def letter_c(x, y, color):
     r_out, r_in = GLYPH_H / 2, GLYPH_H / 2 - STROKE
-    # Opening on the right: from the lower right, clockwise through the bottom, left and top.
+    # Opening on the right.
     body = sector(135, 405, r_out, r_in, color, x, y)
     mid = (r_out + r_in) / 2
     for angle in (135, 405):  # round ends
@@ -204,7 +183,7 @@ def unit_layer(unit):
 
 
 def needle_layer(angle):
-    """Tapered needle from the center toward angle, a dark edge for contrast, and the pivot."""
+    """Needle with a dark edge and a pivot."""
 
     def shape(base_half, tip_half, length, tail):
         tip = point(angle, length)
@@ -225,7 +204,7 @@ def needle_layer(angle):
 
 
 def check(path, text):
-    """Fails if a file uses anything beyond what the game was seen to draw."""
+    """Fails if a file uses shapes the game does not draw."""
     tags = set(re.findall(r"<([a-zA-Z]+)", text))
     extra = tags - ALLOWED
     if extra or "opacity" in text or "fill-rule" in text or "stroke" in text:
@@ -233,7 +212,7 @@ def check(path, text):
 
 
 def layers():
-    """Every SVG file as {path: text}."""
+    """Every SVG file by path."""
     out = {}
     for name, palette in RINGS.items():
         out[os.path.join(MEDIA, name + ".svg")] = ring_layer(*palette)
@@ -249,7 +228,7 @@ def layers():
 
 
 def read(path):
-    """The file's text, or None when it does not exist."""
+    """File text, or None if missing."""
     if not os.path.exists(path):
         return None
     with open(path, encoding="utf-8") as f:
@@ -261,8 +240,7 @@ def on_disk():
 
 
 def old_needles(files, svgs):
-    """Numbered needle files on disk that the current NEEDLE_STEPS no longer draws. Only these are
-    the script's own leftovers; any other SVG in Media is not touched."""
+    """Old needle files no longer used."""
     return [
         path
         for path in svgs
@@ -280,13 +258,13 @@ def main():
     changed = sorted(path for path, text in files.items() if read(path) != text)
     svgs = on_disk()
     leftovers = old_needles(files, svgs)
-    # Hand-made SVGs ship in the zip too, so they must keep to what the game draws.
+    # Hand made SVGs must follow the same rules.
     for path in svgs:
         if path not in files and path not in leftovers:
             check(path, read(path))
 
     if "--check" in sys.argv[1:]:
-        # Packaging: the release must ship exactly the committed art.
+        # The release must ship the committed art.
         if changed or leftovers:
             raise SystemExit(
                 "SVG files differ from tools/make_svg.py; run it and commit the result:\n  "

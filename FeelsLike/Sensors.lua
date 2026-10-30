@@ -1,11 +1,11 @@
--- Reads the game state the model needs. All WoW API calls for the model live here.
+-- Reads the game state for the model.
 
 local _, ns = ...
 
 local Sensors = {}
 ns.Sensors = Sensors
 
--- In the Forever client Blizzard calls the project Camelot.
+-- Blizzard calls the Forever client Camelot.
 Sensors.isForever = WOW_PROJECT_CAMELOT ~= nil and WOW_PROJECT_ID == WOW_PROJECT_CAMELOT
 
 local zones = Sensors.isForever and ns.Zones.forever or ns.Zones.retail
@@ -13,34 +13,21 @@ local UNKNOWN_ZONE = { base = 0, climate = "temperate" }
 local UNKNOWN_INSTANCE = { base = 0, climate = "none" }
 local MAX_PARENT_STEPS = 10
 
--- Every Cozy Fire aura in the game data (wago.tools SpellName, SpellEffect). A fire applies them to
--- players around it for 60 s and renews them while they stay. 7353 is the Basic Campfire one.
--- 458740 is also named Cozy Fire, but it is a dummy spell with no aura, so it is left out.
--- 1232234 is Forever's: 3 s long, from its camp fires, 20 yd around. The game keeps it off the buff
--- bar, and whether addons can read it is not known yet (/feels auras tells).
+-- All Cozy Fire aura IDs. 1232234 is the Forever camp fire.
 local COZY_FIRE_SPELLS = { 7353, 7358, 223298, 432573, 1232234 }
 
--- Forever's camps (Cooking builds the camp fire; wago.tools Spell, SpellInterrupts, 1.60.1.70532).
--- Sitting by a camp fire puts Welcoming Campfire on you for 60 s, and moving takes it off. No fire
--- renews it, so its timer says nothing about leaving: while it is on, you sit by a fire. After the 60 s
--- it turns into Camp Benefits, an hour of buffs that goes wherever you go, so that one tells nothing
--- about the fire. A camp fire without other camp objects gives no benefits at all.
+-- Forever camp fire auras. Sitting by a camp fire gives Welcoming Campfire for 60 s.
 local WELCOMING_CAMPFIRE_SPELLS = { 1229739, 1289723 }
 local CAMP_BENEFITS = 1229741
--- Within 100 yd of a camp fire: too far to warm you, but once seen by your seat, its end means the
--- fire went out (or you went far).
+-- Campfire Nearby, within 100 yd of a camp fire.
 local CAMPFIRE_NEARBY = 1283391
-local CAMPFIRE_HIDDEN = 1229736 -- hidden, 15 yd around a camp fire, taken off by moving; use not known
--- Once you sat down by a camp fire, you may stand up and walk around it: the warmth stays while you stay
--- near where you sat, for as long as a camp fire burns at most (Forever's Basic Campfire: 15 min).
+local CAMPFIRE_HIDDEN = 1229736 -- hidden aura near a camp fire
+-- Warmth stays near your seat for up to 15 min, as long as a camp fire burns.
 local CAMP_FIRE_LIFETIME = 15 * 60
 
--- Torches. Forever's Night Watchman's Torch (a toy from Duskwood) puts a lit torch in your hand for
--- 5 min, and combat and water put it out (wago.tools Spell, SpellInterrupts, 1.60.1.70532). 1309410 is
--- the holder's buff; 1321139, hidden, lights up the allies around the holder.
+-- Night Watchman's Torch, a toy that puts a lit torch in your hand.
 local TORCH_SPELLS = { 1309410, 1321139 }
--- Lit torches you can hold in a hand (wago.tools ItemSparse, 1.60.1.70532). Burnt Out Torch and Torch of
--- the Dormant Flame are not lit, so they are left out.
+-- Lit torches you can hold.
 local TORCH_ITEMS = {
 	[1172] = true, -- Grayson's Torch
 	[2410] = true, -- Smoky Torch
@@ -50,7 +37,7 @@ local TORCH_ITEMS = {
 	[7344] = true, -- Torch of Holy Flame
 	[10515] = true, -- Torch of Retribution
 }
-local HAND_SLOTS = { 16, 17 } -- main hand, off hand
+local HAND_SLOTS = { 16, 17 } -- main hand and off hand
 
 local CAMPFIRE_SPELLS = {}
 local sittingSpells = {}
@@ -62,7 +49,7 @@ for _, spellID in ipairs(WELCOMING_CAMPFIRE_SPELLS) do
 	sittingSpells[spellID] = true
 end
 
--- For /feels auras: every fire aura the addon knows, and what it does with it.
+-- Fire auras the addon knows, for /feels auras.
 Sensors.fireAuraNotes = {}
 for _, spellID in ipairs(CAMPFIRE_SPELLS) do
 	Sensors.fireAuraNotes[spellID] = "counts as campfire"
@@ -84,51 +71,36 @@ end
 local FIRE_MASK = Enum and Enum.Damageclass and Enum.Damageclass.MaskFire or 4
 
 local subzonesByName
--- Campfire. Two signs that you are still by the fire, and both must hold:
--- 1. Freshness: the fire renews the 60 s aura while you stand near, so an aging aura means you left.
---    Remember when the freshest aura was last renewed and the shortest gap seen between two renewals:
---    a fire renews on a fixed beat, longer gaps mean you stepped away and came back. The same longer
---    gap twice in a row is the beat of a slower fire you moved to. A whole multiple of the beat must
---    come three times: twice could be missing every other renewal at the edge of the same fire. After
---    more than any beat without renewal, you left: start over for the next fire.
--- 2. Distance: some clients give addons no timer for this aura (seen on Retail, 2026-10-04), and the
---    aura then stays up to a minute after you leave. So also remember where you stood by the fire and
---    count you as gone once you are farther than the aura reaches.
+-- Campfire state. You count as near while the aura keeps renewing and you stay close to where you stood.
 local campfireRenewedAt
 local campfireRenewalGap
-local campfireLastGap -- the latest gap, to see a longer one repeat
-local campfireSameGaps = 0 -- how many gaps in a row matched the latest one
-local RENEWAL_EPSILON = 0.25 -- seconds; smaller moves of the renewal time are rounding
-local SAME_BEAT = 0.5 -- seconds; two gaps this close are the same beat
-local MAX_RENEWAL_GAP = 15 -- seconds; no fire's beat is longer than this
-local JUST_RENEWED = 2 -- seconds; a first-seen timed aura this fresh was renewed by a fire right now
+local campfireLastGap -- latest gap
+local campfireSameGaps = 0 -- matching gaps in a row
+local RENEWAL_EPSILON = 0.25 -- smaller changes are rounding
+local SAME_BEAT = 0.5 -- gaps this close are the same beat
+local MAX_RENEWAL_GAP = 15 -- no fire renews slower than this
+local JUST_RENEWED = 2 -- an aura this fresh was just renewed
 
-local CAMPFIRE_RADIUS = 10 -- yards the aura reaches around the fire (SpellRadius 13 in the game data)
+local CAMPFIRE_RADIUS = 10 -- yards the aura reaches
 local AWAY_DISTANCE = CAMPFIRE_RADIUS + 2
-local campfireAnchor -- { x, y, map }: where you were last seen by the fire
-local campfireAnchorSettled -- the anchor moved to where you first stood still; only once per aura
-local campfireAuraID -- auraInstanceID of the aura the anchor belongs to
-local campfireLeftAt -- when you got farther than AWAY_DISTANCE from the anchor
--- When UNIT_AURA reported an update of the campfire aura (nil: none since the last read): a fire
--- renewed it, so you are within its reach. The only renewal sign for an aura without a timer (moving
--- from one fire to another).
+local campfireAnchor -- where you last stood by the fire
+local campfireAnchorSettled -- anchor moved once per aura
+local campfireAuraID -- aura the anchor belongs to
+local campfireLeftAt -- when you walked too far
+-- When UNIT_AURA last reported a renewal.
 local campfireAuraUpdatedAt
--- When the last loading screen that moved you (hearth, portal, instance) ended. From then on you are
--- away from the fire you stood by until a fire renews the aura again: the aura may still be on, the
--- client may give it a new auraInstanceID or briefly drop it, and the position may be hidden, but none
--- of that is a fire here.
+-- When the last loading screen that moved you ended.
 local campfireLoadedAt
-local LOADING_SETTLE = 5 -- seconds; the aura missing this soon after loading is the client catching up
-local campSeat -- { auraID, satAt, fireSeen }: the Welcoming Campfire you sat with
+local LOADING_SETTLE = 5 -- the client is still loading auras
+local campSeat -- the Welcoming Campfire you sat with
 
--- Fire underfoot. Fire damage taken outside combat; ignored for a while after combat, when fire DoTs
--- from the fight still tick.
+-- Fire damage outside combat.
 local COMBAT_GRACE = 15 -- seconds
 local lastCombatEnd
 local lastFireHit
 local shelterMemory = {}
 
--- Map IDs inside a zone (caves, start areas) are children of it, so walk up to a known zone.
+-- Walk up the map parents to a known zone.
 local function FindZone(mapID)
 	for _ = 1, MAX_PARENT_STEPS do
 		if not mapID or mapID == 0 then
@@ -142,7 +114,7 @@ local function FindZone(mapID)
 	end
 end
 
--- GetSubZoneText() is localized, so match it against localized area names.
+-- Subzone names are localized.
 local function FindSubzone()
 	if not subzonesByName then
 		subzonesByName = {}
@@ -187,7 +159,7 @@ local function ReadPlace(state)
 	end
 end
 
--- Returns kind ("rain", "snow", "sandstorm" or nil), intensity 0..1, and the raw info for debug.
+-- Returns weather kind, intensity and raw info.
 local function ReadWeather()
 	if not (C_Weather and C_Weather.GetCurrentWeather) then
 		return nil, 0, nil
@@ -201,7 +173,7 @@ local function ReadWeather()
 	return kind, intensity, info
 end
 
--- Restricted data (combat): any value may be secret, and a readable table may hold secret fields.
+-- In combat values may be secret.
 local function IsSecret(value)
 	return issecretvalue ~= nil and issecretvalue(value)
 end
@@ -216,8 +188,7 @@ local function HasTimer(aura)
 	return aura.duration and aura.duration > 0 and aura.expirationTime and aura.expirationTime > 0
 end
 
--- True when gap is a whole multiple (2x, 3x, ...) of beat: maybe renewals missed at the edge of the
--- same fire. A beat this short leaves every gap close to some multiple, so it tells nothing.
+-- True when gap is a whole multiple of beat.
 local function IsMultipleOf(gap, beat)
 	if beat <= 2 * SAME_BEAT then
 		return false
@@ -230,8 +201,7 @@ local function ForgetBeat()
 	campfireRenewedAt, campfireRenewalGap, campfireLastGap, campfireSameGaps = nil, nil, nil, 0
 end
 
--- Forgets the fire you stood by: its beat, where you stood and any renewal not read yet. The aura's ID
--- stays, for a loading screen that leaves the same aura on.
+-- Forgets the fire you stood by.
 local function LeaveFire()
 	ForgetBeat()
 	campfireAnchor, campfireAnchorSettled, campfireLeftAt = nil, nil, nil
@@ -247,7 +217,7 @@ local function ForgetCampfire(now)
 	end
 end
 
--- x, y, map in yards, or nil where the game hides the position (instances).
+-- Player position in yards, or nil when hidden.
 local function PlayerPosition()
 	local y, x, _, map = UnitPosition("player")
 	if not y or IsSecret(x) or IsSecret(y) then
@@ -256,41 +226,32 @@ local function PlayerPosition()
 	return x, y, map
 end
 
--- Distance sign. renewed: the fire just renewed a timed aura, so you are within its reach right now.
--- timed: the aura has a timer, so the timer alone tells renewals (UNIT_AURA also reports the client
--- refreshing its data, after a loading screen, which is no renewal).
--- Returns nearness 0..1 and the distance to the anchor in yards (nil when the position is unknown).
+-- Distance check. Returns nearness and distance to the anchor.
 local function DistanceNearness(now, auraID, renewed, timed)
-	-- Right after a loading screen the client refreshes all aura data, an untimed aura too: an update
-	-- that soon is no renewal. A fire here renews the aura again within its beat.
+	-- Right after loading, an aura update is not a renewal.
 	local updatedAt = not timed and campfireAuraUpdatedAt
 	local refresh = updatedAt and campfireLoadedAt and updatedAt - campfireLoadedAt <= LOADING_SETTLE
 	renewed = renewed or (updatedAt and not refresh) or false
 	campfireAuraUpdatedAt = nil
 	if campfireLoadedAt then
-		-- Follow the aura's current ID, so a renewal of it here is recognized.
+		-- Follow the aura's current ID.
 		campfireAuraID = auraID
 		if not renewed then
 			return 0, nil
 		end
-		-- A fire renewed the aura after the loading screen. The anchor went at the loading screen, so
-		-- it is set below where you are now.
+		-- A fire renewed the aura after loading.
 		campfireLoadedAt = nil
 	end
 	local x, y, map = PlayerPosition()
 	if not x then
-		-- Without a position only the aura tells: a new or renewed aura means you are at a fire now,
-		-- and the anchor of the last fire no longer holds. Otherwise keep what is known, so a fire you
-		-- already left stays left.
+		-- Without a position only the aura tells.
 		if auraID ~= campfireAuraID or renewed then
 			campfireAuraID, campfireLeftAt, campfireAnchor = auraID, nil, nil
 		end
 		return ns.Model.CampfireDistanceNearness(campfireLeftAt and now - campfireLeftAt), nil
 	end
 
-	-- Move the anchor to you when: there is none yet; a new aura appeared (a new fire); the fire just
-	-- renewed a timed aura (you are within reach); or you stand still for the first time with this aura
-	-- while near (the aura may start at the edge of its reach, but you stop by the fire itself).
+	-- Move the anchor to where you are when needed.
 	local newAura = auraID ~= campfireAuraID
 	local standingStill = GetUnitSpeed("player") == 0
 	local firstStop = standingStill and not campfireAnchorSettled and not campfireLeftAt
@@ -318,7 +279,7 @@ local function DistanceNearness(now, auraID, renewed, timed)
 	return ns.Model.CampfireDistanceNearness(campfireLeftAt and now - campfireLeftAt), distance
 end
 
--- Sitting by a camp fire (Welcoming Campfire on): by the fire while it is on and you stay near.
+-- Sitting by a camp fire.
 local function SittingNearness(now, aura)
 	if not campSeat or campSeat.auraID ~= aura.auraInstanceID then
 		campSeat = { auraID = aura.auraInstanceID, satAt = now }
@@ -327,15 +288,12 @@ local function SittingNearness(now, aura)
 	if not IsSecretAura(nearby) and nearby then
 		campSeat.fireSeen = true
 	end
-	-- Put on after the last loading screen: you sit by a fire here, so the wait for a renewal ends.
+	-- Sat down after the last loading screen.
 	local satHere = HasTimer(aura) and campfireLoadedAt ~= nil and aura.expirationTime - aura.duration > campfireLoadedAt
 	return DistanceNearness(now, aura.auraInstanceID, satHere, false)
 end
 
--- Welcoming Campfire is gone: moving took it off, or its minute turned into Camp Benefits. Still by the
--- fire while you stay near where you sat, until the fire burns out: Campfire Nearby ends, if it was seen
--- there, and at most CAMP_FIRE_LIFETIME after you sat down. Returns nearness and distance (nil when
--- unknown), or nothing when the seat no longer counts.
+-- Welcoming Campfire is gone, but you still count as near while you stay close to your seat.
 local function StayedNearness(now)
 	if not campSeat then
 		return nil
@@ -348,14 +306,12 @@ local function StayedNearness(now)
 	end
 	local nearness, distance = DistanceNearness(now, campfireAuraID, false, false)
 	if nearness == 0 then
-		campSeat = nil -- walked away: no warmth from this seat until you sit by a fire again
+		campSeat = nil -- walked away
 	end
 	return nearness, distance
 end
 
--- Returns nearness 0..1, seconds since renewal (nil without a timer), measured gap (or nil),
--- distance from where you stood by the fire (nil when unknown), and "sitting" or "stayed" by a camp fire.
--- While aura data is secret (combat), assume no renewal since the last one seen, so warmth still fades.
+-- Returns campfire nearness and details for /feels debug.
 local function CampfireNearness()
 	local now = GetTime()
 	local timed, renewedAt, untimed, sitting
@@ -399,14 +355,14 @@ local function CampfireNearness()
 		ForgetCampfire(now)
 		return 0
 	end
-	-- A fire's own aura tells better than an earlier seat by a camp fire: it ends when the fire goes out.
+	-- A fire's own aura is better than an old seat.
 	campSeat = nil
 
-	-- Freshness (timed auras only; without a timer there is nothing to measure).
+	-- Freshness, only for timed auras.
 	local fresh, since, gap, renewed = 1, nil, nil, false
 	if timed then
 		since = math.max(0, now - renewedAt)
-		-- Last renewed before the loading screen, by the fire you left: nothing here to measure.
+		-- Renewed before loading, nothing to measure.
 		local beforeLoading = campfireLoadedAt and renewedAt <= campfireLoadedAt
 		if beforeLoading then
 			renewed = false
@@ -426,11 +382,11 @@ local function CampfireNearness()
 			end
 			campfireLastGap = newGap
 		elseif not campfireRenewedAt and (since <= JUST_RENEWED or campfireLoadedAt) then
-			renewed = true -- back at a fire after the measurement was reset, or the first one after loading
+			renewed = true -- first renewal after a reset
 		end
 		gap = campfireRenewalGap
 		fresh = ns.Model.CampfireNearness(since, gap)
-		-- Start over only once the warmth has fully faded, so a long measured beat still fades smoothly.
+		-- Start over only after the warmth has faded.
 		if since > MAX_RENEWAL_GAP and fresh == 0 then
 			ForgetBeat()
 		elseif not beforeLoading then
@@ -443,8 +399,7 @@ local function CampfireNearness()
 	return math.min(fresh, distanceNearness), since, gap, distance
 end
 
--- Where the light of a torch comes from, for /feels debug: "in hand" (the toy or a torch item), "from an
--- ally's torch", or nil without one.
+-- Where the torch light comes from, for /feels debug.
 local function TorchLight()
 	for _, slot in ipairs(HAND_SLOTS) do
 		if TORCH_ITEMS[GetInventoryItemID("player", slot)] then
@@ -460,7 +415,7 @@ local function TorchLight()
 	return nil
 end
 
--- UNIT_AURA for the player: notes when the game renews the campfire aura.
+-- Notes when the game renews the campfire aura.
 function Sensors.OnUnitAura(updateInfo)
 	if not campfireAuraID or not updateInfo or IsSecret(updateInfo) then
 		return
@@ -481,8 +436,7 @@ function Sensors.OnCombatEnded()
 	lastCombatEnd = GetTime()
 end
 
--- UNIT_COMBAT for the player: true for fire damage. Fire damage outside combat is almost always
--- a campfire or lava underfoot; Core confirms it with AcceptFireHit one frame later.
+-- True for fire damage to the player.
 function Sensors.IsFireHit(action, amount, schoolMask)
 	if IsSecret(action) or IsSecret(amount) or IsSecret(schoolMask) then
 		return false
@@ -490,8 +444,7 @@ function Sensors.IsFireHit(action, amount, schoolMask)
 	return action == "WOUND" and amount ~= nil and amount > 0 and bit.band(schoolMask or 0, FIRE_MASK) ~= 0
 end
 
--- Called a frame after the hit, when the combat flag of a fight that this hit started is set.
--- Returns true when the hit counts as fire underfoot.
+-- Checked one frame after the hit. True when it counts as fire underfoot.
 function Sensors.AcceptFireHit()
 	local now = GetTime()
 	if InCombatLockdown() or (lastCombatEnd and now - lastCombatEnd < COMBAT_GRACE) then
@@ -501,10 +454,7 @@ function Sensors.AcceptFireHit()
 	return true
 end
 
--- After a loading screen the new place counts at once, without the door delay. When it moved you
--- (hearth, portal, instance), the fire you stood by is behind you too: forget it, including a renewal
--- reported just before, and wait for a fire to renew the aura where you are. A login or /reload
--- leaves you where you were.
+-- After a loading screen the new place counts at once.
 function Sensors.OnLoadingScreen(moved)
 	shelterMemory = {}
 	if not moved then
@@ -523,7 +473,7 @@ function Sensors.Read()
 
 	local hour, minute = GetGameTime()
 	state.hour = hour + minute / 60
-	-- Forever has its own day/night indicator; debug prints it next to our clock to compare.
+	-- Forever's own day and night indicator, for /feels debug.
 	if C_DateAndTime and C_DateAndTime.IsDayTime then
 		state.gameSaysDay = C_DateAndTime.IsDayTime()
 	end
@@ -531,9 +481,7 @@ function Sensors.Read()
 	state.weather, state.weatherIntensity, state.weatherInfo = ReadWeather()
 	state.weatherAvailable = C_Weather ~= nil
 
-	-- IsResting() alone is not enough: whole capital cities are rest areas. A place that is inside as a
-	-- whole is indoors and resting everywhere, so there it is no inn (Model ignores the inn there too,
-	-- but the settled shelter must not hold "inn" either, or it would linger after you walk out).
+	-- Whole capital cities are rest areas, so resting alone is not an inn.
 	local rawShelter = "outdoors"
 	if IsIndoors() then
 		rawShelter = IsResting() and not state.inside and "inn" or "indoors"

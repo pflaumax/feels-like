@@ -1,5 +1,4 @@
--- Base temperature (-100..100) and climate per uiMapID. Draft values from PLAN.md section 6.1, tuned in game.
--- Forever uses the classic map IDs; Retail uses its own. Source: wago.tools UiMap, builds 1.60.1.70205 and 12.1.0.69933.
+-- Base temperature from -100 to 100 and climate per map ID.
 
 local _, ns = ...
 
@@ -7,9 +6,7 @@ local function Zone(base, climate, inside)
 	return { base = base, climate = climate, inside = inside }
 end
 
--- A place that is inside as a whole (in a mountain, underground). Its value already describes how it
--- feels in there, so shelter and inns do not apply, as in instances. The game reports such a city as
--- indoors and resting everywhere, so without this it would read as one big inn.
+-- Places that are fully inside, like Ironforge and Undercity. Shelter and inns do not apply there.
 local INSIDE = true
 
 ns.Zones = {}
@@ -37,8 +34,8 @@ ns.Zones.forever = {
 	[1454] = Zone(25, "arid"), -- Orgrimmar
 	[1456] = Zone(10, "temperate"), -- Thunder Bluff
 	[1457] = Zone(0, "temperate"), -- Darnassus
-	[2482] = Zone(-30, "snow"), -- Mount Hyjal (new, check in game)
-	[2652] = Zone(10, "temperate"), -- Shen'dralas (new, check in game)
+	[2482] = Zone(-30, "snow"), -- Mount Hyjal
+	[2652] = Zone(10, "temperate"), -- Shen'dralas
 
 	-- Eastern Kingdoms
 	[1416] = Zone(-50, "snow"), -- Alterac Mountains
@@ -64,16 +61,16 @@ ns.Zones.forever = {
 	[1436] = Zone(10, "temperate"), -- Westfall
 	[1437] = Zone(-10, "temperate"), -- Wetlands
 	[1453] = Zone(5, "temperate"), -- Stormwind City
-	[1455] = Zone(25, "none", INSIDE), -- Ironforge: inside the mountain, by the forges
-	[1458] = Zone(-20, "none", INSIDE), -- Undercity: underground crypts
-	[2548] = Zone(10, "temperate"), -- Riverglades (new, check in game)
+	[1455] = Zone(25, "none", INSIDE), -- Ironforge
+	[1458] = Zone(-20, "none", INSIDE), -- Undercity
+	[2548] = Zone(10, "temperate"), -- Riverglades
 
-	-- Skyborne start zone; two map IDs in the game data
-	[2521] = Zone(0, "temperate"), -- Zephras Isle (new, check in game)
-	[2665] = Zone(0, "temperate"), -- Zephras Isle (new, check in game)
+	-- Skyborne start zone has two map IDs.
+	[2521] = Zone(0, "temperate"), -- Zephras Isle
+	[2665] = Zone(0, "temperate"), -- Zephras Isle
 }
 
--- Enough for testing on Retail before Forever launches.
+-- A few zones for testing on Retail.
 ns.Zones.retail = {
 	[1] = Zone(25, "arid"), -- Durotar
 	[27] = Zone(-60, "snow"), -- Dun Morogh
@@ -86,19 +83,16 @@ ns.Zones.retail = {
 	[90] = Zone(-20, "none", INSIDE), -- Undercity
 }
 
--- Subzone overrides per areaID. The same area IDs work in both clients; an area missing in a client is skipped.
--- Sensors matches them by localized name, so a name must not belong to an area in another zone.
--- Checked against AreaTable on 2026-10-04 (Forever and Retail): Blackrock Mountain repeats, but every
--- copy is the same mountain with the same value. Check again when adding an entry.
+-- Subzone overrides per area ID.
 ns.Zones.subzones = {
-	[2246] = Zone(10, "snow"), -- Frostfire Hot Springs (Winterspring): warm water in the snow
-	[439] = Zone(55, "desert"), -- The Shimmering Flats (Thousand Needles): salt flats
-	[509] = Zone(60, "volcanic"), -- The Den of Flame (Dustwallow Marsh)
-	[543] = Zone(70, "tropical"), -- Golakka Hot Springs (Un'Goro Crater)
-	[254] = Zone(90, "volcanic"), -- Blackrock Mountain (Burning Steppes)
-	[1445] = Zone(90, "volcanic"), -- Blackrock Mountain (Searing Gorge)
-	[16513] = Zone(90, "volcanic"), -- Blackrock Mountain (Burning Steppes)
-	[537] = Zone(90, "volcanic"), -- Fire Plume Ridge (Un'Goro Crater)
-	[246] = Zone(100, "volcanic"), -- The Cauldron (Searing Gorge): lava pit
-	[5342] = Zone(45, "none", INSIDE), -- The Great Forge (Ironforge, Retail only)
+	[2246] = Zone(10, "snow"), -- Frostfire Hot Springs
+	[439] = Zone(55, "desert"), -- The Shimmering Flats
+	[509] = Zone(60, "volcanic"), -- The Den of Flame
+	[543] = Zone(70, "tropical"), -- Golakka Hot Springs
+	[254] = Zone(90, "volcanic"), -- Blackrock Mountain
+	[1445] = Zone(90, "volcanic"), -- Blackrock Mountain
+	[16513] = Zone(90, "volcanic"), -- Blackrock Mountain
+	[537] = Zone(90, "volcanic"), -- Fire Plume Ridge
+	[246] = Zone(100, "volcanic"), -- The Cauldron
+	[5342] = Zone(45, "none", INSIDE), -- The Great Forge
 }

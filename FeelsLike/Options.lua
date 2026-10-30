@@ -1,4 +1,4 @@
--- Options → AddOns → Feels Like. Built on the vertical-list Settings API (11.0+).
+-- Settings panel in Options, AddOns, Feels Like.
 
 local _, ns = ...
 

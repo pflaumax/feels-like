@@ -1,23 +1,18 @@
-"""Constants the asset scripts share with the addon, read from its Lua files so they cannot drift apart.
-
-Model.lua sets the scale colors and the sweep; DialVector.lua sets how many needle positions it loads.
-"""
+"""Constants shared with the addon, read from its Lua files."""
 
 import os
 import re
 
-# The project root, so the scripts work from any folder.
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL = os.path.join(ROOT, "FeelsLike", "Model.lua")
 DIAL_VECTOR = os.path.join(ROOT, "FeelsLike", "DialVector.lua")
 
-# Neutral segments for the SVG scale and the icon: a touch lighter than in the line renderer
-# (Model.lua NEUTRAL), so the dim top of the scale still shows at small sizes.
+# Neutral color for the SVG scale and icon.
 SCALE_NEUTRAL = "2E3F4F"
 
 
 def _read_lua(path):
-    """The file without its comments (--[[ ]] blocks and -- lines), so commented-out code never counts."""
+    """The Lua file without comments."""
     with open(path, encoding="utf-8") as f:
         text = f.read()
     text = re.sub(r"--\[(=*)\[.*?\]\1\]", "", text, flags=re.DOTALL)
@@ -25,7 +20,7 @@ def _read_lua(path):
 
 
 def _whole_number(text, name, where):
-    """The value of `name = <whole number>` on a line of its own; anything else is an error."""
+    """Reads a whole number constant."""
     match = re.search(rf"^{re.escape(name)} = (\S+)[ \t]*$", text, re.MULTILINE)
     if not match or not match.group(1).isdigit():
         raise SystemExit(f"{where}: no `{name} = <whole number>` line")
@@ -33,7 +28,7 @@ def _whole_number(text, name, where):
 
 
 def segment_colors():
-    """Model.SEGMENT_COLORS from cold to hot as hex strings, with SCALE_NEUTRAL for the neutral ones."""
+    """Segment colors from cold to hot."""
     text = _read_lua(MODEL)
     block = re.search(r"Model\.SEGMENT_COLORS = \{(.*?)\n\}", text, re.DOTALL)
     if not block:
@@ -55,10 +50,10 @@ def segment_colors():
 
 
 def sweep():
-    """Model.SWEEP: degrees of the arc, centered on 12 o'clock."""
+    """Arc of the scale in degrees."""
     return _whole_number(_read_lua(MODEL), "Model.SWEEP", MODEL)
 
 
 def needle_steps():
-    """NEEDLE_STEPS from DialVector.lua: the needle files are 00.svg to <steps>.svg."""
+    """Number of needle steps."""
     return _whole_number(_read_lua(DIAL_VECTOR), "local NEEDLE_STEPS", DIAL_VECTOR)

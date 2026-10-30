@@ -1,4 +1,4 @@
--- Run from the project root: luajit tests/model_test.lua
+-- Run with luajit tests/model_test.lua
 
 local ns = {}
 assert(loadfile("FeelsLike/Model.lua"))("FeelsLike", ns)
@@ -26,7 +26,7 @@ check("clamp low", Model.Clamp(-500), -100)
 check("clamp high", Model.Clamp(500), 100)
 check("clamp inside", Model.Clamp(12), 12)
 
--- Angle: 270 degree sweep centered on 12 o'clock
+-- Angle
 near("angle min", Model.Angle(-100), -135)
 near("angle zero", Model.Angle(0), 0)
 near("angle max", Model.Angle(100), 135)
@@ -39,7 +39,7 @@ check("segment max", Model.SegmentIndex(100), 12)
 check("segment zero", Model.SegmentIndex(0), 7)
 check("segment colors", #Model.SEGMENT_COLORS, Model.SEGMENT_COUNT)
 
--- Band words, including edges from PLAN.md section 7.3
+-- Band words
 local bands = {
 	{ -100, "Freezing" }, { -67, "Freezing" }, { -66, "Cold" }, { -34, "Cold" },
 	{ -33, "Mild" }, { 0, "Mild" }, { 33, "Mild" }, { 34, "Warm" },
@@ -66,8 +66,7 @@ check("extreme max cold", cold, 0)
 cold, hot = Model.Extremes(-1000)
 check("extreme clamped cold", cold, 1)
 
--- Day/night: day 09:00 to 21:00, warmest at 15:00; the night falls to its coldest at 05:00 and climbs
--- back by 09:00.
+-- Day and night
 near("day peak desert", Model.DayNight(15, "desert"), 50)
 near("night low desert", Model.DayNight(5, "desert"), -50)
 near("day peak arid", Model.DayNight(15, "arid"), 30)
@@ -82,7 +81,7 @@ near("morning climbs over 4 hours", Model.DayNight(7, "temperate"), -30 * math.s
 near("hour 24 is midnight", Model.DayNight(24, "temperate"), Model.DayNight(0, "temperate"))
 near("volcanic flat", Model.DayNight(5, "volcanic"), 0)
 near("unknown climate flat", Model.DayNight(5, "nope"), 0)
--- A mild zone at night: Mulgore (10) before dawn is in the coolest Mild segment.
+-- Mild zone before dawn
 check("mild zone night word", Model.Band(10 + Model.DayNight(5, "temperate")).word, "Mild")
 check("mild zone night segment", Model.SegmentIndex(10 + Model.DayNight(5, "temperate")), 5)
 
@@ -94,7 +93,7 @@ local function state(fields)
 	for k, v in pairs(fields) do s[k] = v end
 	return s
 end
--- Shelter pulls toward a room temperature: indoors 15 (40% of the outside gets in), inn 22 (10%).
+-- Shelter
 near("indoors in the heat is cooler", Model.Compute(state({ base = 75, indoors = true }), 0).target, 39)
 near("indoors on a mild day is the same", Model.Compute(state({ base = 15, indoors = true }), 0).target, 15)
 near("indoors at night is warmer", Model.Compute(state({ base = -5, indoors = true }), 0).target, 7)
@@ -107,18 +106,18 @@ near("inside place keeps campfire", Model.Compute(state({ base = -20, indoors = 
 near("no weather inside a place", Model.Compute(state({ base = -20, inside = true, weather = "snow", weatherIntensity = 1 }), 0).target, -20)
 near("no rain soaks inside a place", Model.UpdateWetness(0, 60, state({ inside = true, weather = "rain", weatherIntensity = 1 }), 0), 0)
 near("campfire", Model.Compute(state({ base = -60, campfire = 1 }), 0).target, -25)
--- A fire warms up to 45 and no further, and never cools.
+-- Fire
 near("campfire stops at warm", Model.Compute(state({ base = 20, campfire = 1 }), 0).target, 45)
 check("campfire on a mild day is cozy", Model.Compute(state({ base = 20, campfire = 1 }), 0).cozy, true)
 near("campfire does not cool", Model.Compute(state({ base = 90, campfire = 1 }), 0).target, 90)
--- A torch in hand warms by 20, under the same limit; not in an inn, not in water.
+-- Torch
 near("torch", Model.Compute(state({ base = -60, torch = true }), 0).target, -40)
 near("torch and campfire share the limit", Model.Compute(state({ base = 0, campfire = 1, torch = true }), 0).target, 45)
 near("torch next to a campfire", Model.Compute(state({ base = -60, campfire = 1, torch = true }), 0).target, -5)
 check("torch is not cozy", Model.Compute(state({ base = 0, torch = true }), 0).cozy, false)
 near("torch in an inn", Model.Compute(state({ base = 5, indoors = true, inn = true, torch = true }), 0).target, 20.3)
 near("torch in water", Model.Compute(state({ base = 0, torch = true, swimming = true }), 1).target, -50)
--- Wet clothes take half the warmth above the bottom of the scale when soaked.
+-- Wet clothes
 near("wet", Model.Compute(state({ base = 0 }), 0.5).target, -25)
 check("soaked on a mild day is cold", Model.Band(Model.Compute(state({ base = 20 }), 1).target).word, "Cold")
 check("soaked on a mild night is cold", Model.Band(Model.Compute(state({ base = -25 }), 1).target).word, "Cold")
@@ -132,12 +131,12 @@ check("campfire too hot not cozy", Model.Compute(state({ base = 75, campfire = 1
 check("campfire still cold not cozy", Model.Compute(state({ base = -100, campfire = 1 }), 0).cozy, false)
 check("outdoors not cozy", Model.Compute(state({ base = 0 }), 0).cozy, false)
 
--- Campfire nearness: the aura is renewed while you stand by the fire
+-- Campfire nearness
 check("fresh aura", Model.CampfireNearness(0), 1)
 check("renewed recently", Model.CampfireNearness(4), 1)
 near("walking away", Model.CampfireNearness(6), 0.5)
 check("walked away", Model.CampfireNearness(8), 0)
--- With a measured renewal gap the hold is the gap plus 1.5 s, between 4 and 16 s.
+-- Measured renewal gap
 check("slow fire still near", Model.CampfireNearness(6, 6), 1)
 near("slow fire walking away", Model.CampfireNearness(10, 6), 0.375)
 check("slow fire walked away", Model.CampfireNearness(12, 6), 0)
@@ -181,7 +180,7 @@ near("campfire dries fast", Model.UpdateWetness(1, 7.5, state({ campfire = 1 }),
 check("fire dries at once", Model.UpdateWetness(1, 1, state({ burning = 0.3 }), -60), 0)
 check("lava does not soak", Model.UpdateWetness(0, 1, state({ swimming = true, burning = 1 }), 100), 0)
 
--- Shelter settles: a new shelter counts only after it lasted 2 s.
+-- Shelter delay
 local memory = {}
 check("first reading counts at once", Model.SettleShelter(memory, "outdoors", 0), "outdoors")
 check("door: indoors waits", Model.SettleShelter(memory, "indoors", 10), "outdoors")

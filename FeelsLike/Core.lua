@@ -1,4 +1,4 @@
--- Startup, saved variables, the update loop and slash commands.
+-- Startup, settings, update loop and slash commands.
 
 local addonName, ns = ...
 
@@ -6,15 +6,13 @@ ns.DEFAULTS = {
 	unit = "C",
 	label = "hover",
 	locked = false,
-	-- Forever: as big as the day/night button by the minimap, its band and outline on the button's
-	-- (measured on Forever screenshots, 2026-10-21). Retail: picked in game with the classic-style UI
-	-- (2026-10-04).
+	-- Default gauge size for Forever and Retail.
 	scale = ns.Sensors.isForever and 0.53 or 0.45,
 }
 
 local PREFIX = "|cffF2C94CFeels Like|r: "
 
--- Seconds between updates. Swimming, time of day and drying have no events, so they need a timer.
+-- Seconds between updates.
 local TICK = 1
 
 local UPDATE_EVENTS = {
@@ -25,30 +23,29 @@ local UPDATE_EVENTS = {
 	"PLAYER_UPDATE_RESTING",
 }
 
--- /feels test sweep steps.
+-- Steps for /feels test sweep.
 local SWEEP_STEPS = { -100, -80, -50, -20, 0, 20, 40, 60, 80, 100 }
 local SWEEP_DELAY = 1.5
--- A test value gives the gauge back to real readings by itself, so it never stays stuck.
+-- A test value ends by itself after this many seconds.
 local TEST_TIMEOUT = 30
 
-local MAX_AURAS = 255 -- /feels auras lists at most this many buffs
+local MAX_AURAS = 255
 
 local wetness = 0
 local lastState, lastResult
-local lastUpdate -- GetTime() of the last Update
--- While a test is active, real readings do not move the gauge.
+local lastUpdate
+-- While a test runs, real readings do not move the gauge.
 local test
--- Bumped by every test command and by StopTest; pending sweeps and timeouts of older runs do nothing.
+-- Each test run gets a new number, so old timers do nothing.
 local testRun = 0
 
 local function Print(message)
 	print(PREFIX .. message)
 end
 
--- The saved settings' version. 0.1.0 saved none, and it saved its defaults as if they were choices.
+-- Version of the saved settings.
 local DB_VERSION = 2
--- 0.1.0's default scale. A gauge still at it was likely never resized, so it takes this version's
--- default (Forever's now matches the day/night button; Retail's is the same 0.45).
+-- Default scale of version 0.1.0.
 local OLD_DEFAULT_SCALE = 0.45
 
 local function InitDB()
@@ -66,8 +63,7 @@ local function InitDB()
 end
 
 local function Update()
-	-- Clothes dried or soaked over the real time since the last update, in the conditions of that time.
-	-- A loading screen delays updates, and that time counts where you were, not where you arrive.
+	-- Update how wet the clothes are since the last update.
 	local now = GetTime()
 	if lastState then
 		wetness = ns.Model.UpdateWetness(wetness, now - lastUpdate, lastState, lastResult.dry + lastResult.burn)
@@ -95,7 +91,7 @@ local function StopTest()
 	Update()
 end
 
--- Starts a held test value that ends by itself after TEST_TIMEOUT seconds.
+-- Holds a test value for TEST_TIMEOUT seconds.
 local function HoldTest(value, cozy)
 	testRun = testRun + 1
 	local run = testRun
@@ -181,7 +177,7 @@ local function PrintDebug()
 	print("  position: " .. ns.Gauge:DescribePosition())
 end
 
--- Lists the player's buffs, to find which aura a campfire gives.
+-- Lists the player's buffs to find the campfire aura.
 local function PrintAuras()
 	Print("your buffs")
 	local IsSecret = ns.Sensors.IsSecret
@@ -196,7 +192,6 @@ local function PrintAuras()
 		count = count + 1
 	end
 	local listed = {}
-	-- Modern clients allow more than 40 buffs; the cap only guards against a list that never ends.
 	for index = 1, MAX_AURAS do
 		local aura = C_UnitAuras.GetAuraDataByIndex("player", index, "HELPFUL")
 		if IsHidden(aura) then
@@ -209,7 +204,7 @@ local function PrintAuras()
 		listed[aura.spellId] = true
 		Line(aura, "")
 	end
-	-- Some fire auras are kept off the buff list by the game; asked by ID, the client may still give them.
+	-- Some fire auras are hidden from the buff list, so ask for them by ID.
 	local fireIDs = {}
 	for spellID in pairs(notes) do
 		fireIDs[#fireIDs + 1] = spellID
@@ -240,14 +235,14 @@ end
 
 local function Test(arg)
 	local value = tonumber(arg)
-	if value and value == value then -- value == value rules out NaN ("nan")
+	if value and value == value then -- skip NaN
 		HoldTest(value, test and test.cozy or false)
 	elseif arg == "sweep" then
 		testRun = testRun + 1
 		Sweep(testRun, 1)
 	elseif arg == "cozy" then
 		local cozy = not (test and test.cozy)
-		-- Keep the needle where it is: the running test value, or else the real reading.
+		-- Keep the needle where it is.
 		HoldTest(test and test.value or (lastResult and lastResult.target) or 0, cozy)
 		Print("test cozy " .. (cozy and "on" or "off"))
 	elseif arg == "off" then
@@ -259,8 +254,7 @@ end
 
 SLASH_FEELSLIKE1 = "/feels"
 SLASH_FEELSLIKE2 = "/feelslike"
--- A frame by its global name, or by a path of keys from a global frame ("MinimapCluster.DielFrame"):
--- /fstack shows frames without a name of their own by an address that cannot be looked up.
+-- Finds a frame by global name or by a path like MinimapCluster.DielFrame.
 local function FindFrame(path)
 	local target = _G
 	for key in path:gmatch("[^.]+") do
@@ -272,7 +266,7 @@ local function FindFrame(path)
 	return target
 end
 
--- Prints where a frame (by its global name or path, as /fstack shows it) sits by the minimap.
+-- Prints where a frame sits next to the minimap.
 local function Measure(name)
 	local target = name and FindFrame(name)
 	if type(target) ~= "table" or type(target.GetCenter) ~= "function" then
@@ -284,7 +278,7 @@ local function Measure(name)
 end
 
 SlashCmdList.FEELSLIKE = function(input)
-	-- Frame names are case-sensitive, so only the command is lowercased here.
+	-- Frame names are case sensitive, so only the command is lowercased.
 	local command, arg = strsplit(" ", strtrim(input or ""), 2)
 	command = command:lower()
 	arg = arg and strtrim(arg)
@@ -316,12 +310,11 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 	for _, event in ipairs(UPDATE_EVENTS) do
 		events:RegisterEvent(event)
 	end
-	-- Registering an event the client does not know raises an error.
+	-- Only register events the client knows.
 	if C_EventUtils and C_EventUtils.IsEventValid("WEATHER_CHANGED") then
 		events:RegisterEvent("WEATHER_CHANGED")
 	end
-	-- Fire or lava damage taken outside combat (see Sensors.IsFireHit), the end of combat, and
-	-- updates of the campfire aura.
+	-- Fire damage, end of combat and campfire aura updates.
 	events:RegisterUnitEvent("UNIT_COMBAT", "player")
 	events:RegisterUnitEvent("UNIT_AURA", "player")
 	events:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -329,7 +322,7 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 		if event == "UNIT_COMBAT" then
 			local _, action, _, amount, schoolMask = ...
 			if ns.Sensors.IsFireHit(action, amount, schoolMask) then
-				-- A fire mob's first hit can arrive before the combat flag; look again next frame.
+				-- A fire mob can hit before combat starts, so check again next frame.
 				C_Timer.After(0, function()
 					if ns.Sensors.AcceptFireHit() then
 						Update()

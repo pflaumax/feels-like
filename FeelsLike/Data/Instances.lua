@@ -1,6 +1,4 @@
--- Base temperature and climate per instanceID (8th return of GetInstanceInfo). IDs are the same in Forever and Retail.
--- Instances missing here count as a neutral indoor place. Source: wago.tools Map, build 1.60.1.70205.
--- Shelter does not apply inside instances, so these values are what the player feels there.
+-- Base temperature and climate per instance ID.
 
 local _, ns = ...
 
@@ -10,12 +8,12 @@ end
 
 ns.Instances = {
 	-- Dungeons
-	[33] = Instance(-15, "none"), -- Shadowfang Keep: cold stone keep
-	[43] = Instance(20, "none"), -- Wailing Caverns: humid caves
+	[33] = Instance(-15, "none"), -- Shadowfang Keep
+	[43] = Instance(20, "none"), -- Wailing Caverns
 	[47] = Instance(30, "arid"), -- Razorfen Kraul
-	[48] = Instance(-20, "none"), -- Blackfathom Deeps: flooded ruins
-	[70] = Instance(-10, "none"), -- Uldaman: stone vaults
-	[109] = Instance(35, "none"), -- Sunken Temple: swamp water
+	[48] = Instance(-20, "none"), -- Blackfathom Deeps
+	[70] = Instance(-10, "none"), -- Uldaman
+	[109] = Instance(35, "none"), -- Sunken Temple
 	[129] = Instance(20, "arid"), -- Razorfen Downs
 	[209] = Instance(55, "desert"), -- Zul'Farrak
 	[229] = Instance(60, "volcanic"), -- Blackrock Spire
@@ -38,15 +36,15 @@ ns.Instances = {
 	[30] = Instance(-60, "snow"), -- Alterac Valley
 	[489] = Instance(5, "temperate"), -- Warsong Gulch
 	[529] = Instance(5, "temperate"), -- Arathi Basin
-	[2997] = Instance(40, "tropical"), -- Darkspear Islands (new battleground)
+	[2997] = Instance(40, "tropical"), -- Darkspear Islands
 	[3005] = Instance(-5, "temperate"), -- Battle for Gilneas
 
-	-- In the Forever game data; names suggest the climate. Check in game.
+	-- New in Forever, check in game.
 	[2720] = Instance(80, "volcanic"), -- The Searing Basin
-	[2789] = Instance(50, "arid"), -- The Tainted Scar (Blasted Lands)
+	[2789] = Instance(50, "arid"), -- The Tainted Scar
 	[2807] = Instance(60, "none"), -- Burning of Andorhal
 	[2875] = Instance(-30, "none"), -- Karazhan Crypts
 	[2902] = Instance(50, "desert"), -- The Scarab Dais
-	[2921] = Instance(-30, "none"), -- Naxxramas (dungeon)
+	[2921] = Instance(-30, "none"), -- Naxxramas
 	[3109] = Instance(-10, "none"), -- Manor Mistmantle
 }

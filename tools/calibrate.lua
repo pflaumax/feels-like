@@ -1,5 +1,4 @@
--- Prints the tooltip word for every Forever zone and instance at 15:00 and 05:00 (the warmest and the coldest hour), outdoors and dry.
--- Run from the project root: luajit tools/calibrate.lua
+-- Prints the label for every Forever zone and instance by day and night. Run with luajit tools/calibrate.lua
 
 local ns = {}
 for _, file in ipairs({ "Model.lua", "Data/Zones.lua", "Data/Instances.lua" }) do
@@ -7,8 +6,7 @@ for _, file in ipairs({ "Model.lua", "Data/Zones.lua", "Data/Instances.lua" }) d
 end
 local Model = ns.Model
 
--- Names come from the comments next to each entry, read only inside the given table:
--- map IDs and area IDs overlap, so one name list per table.
+-- Names come from the comments next to each entry.
 local function Names(path, header)
 	local names, inside = {}, false
 	for line in io.lines(path) do

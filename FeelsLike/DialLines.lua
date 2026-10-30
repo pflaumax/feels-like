@@ -1,5 +1,4 @@
--- Fallback dial for clients without SVG support: built-in gold ring, segments and needle drawn as lines.
--- Looks rough below scale 1; DialVector is used whenever the client can draw SVG.
+-- Simple dial drawn with lines for clients without SVG support.
 
 local _, ns = ...
 local Model = ns.Model
@@ -7,8 +6,7 @@ local Model = ns.Model
 local DialLines = {}
 ns.DialLines = DialLines
 
--- Unscaled pixels for a 72 px gauge. Interface\COMMON\GoldRing (64x64) has its outer edge at 0.461
--- and its inner edge at 0.34 of the texture size, so a 78 px ring fits a 72 px gauge.
+-- Sizes in pixels for a 72 px gauge.
 local RING_SIZE = 78
 local FACE_SIZE = 54
 local SEGMENT_INNER = 17
@@ -22,7 +20,7 @@ local UNIT_OFFSET_Y = -16
 local FACE_COLOR = { 0.055, 0.086, 0.125 }
 local FACE_COLD = { 0.086, 0.227, 0.333 }
 local FACE_HOT = { 0.29, 0.1, 0.055 }
-local FACE_ALPHA = 1 -- opaque, like the SVG face: the minimap must not show through the gauge
+local FACE_ALPHA = 1 -- opaque so the minimap does not show through
 local RING_COLD = { 0.65, 0.88, 1 }
 local RING_HOT = { 1, 0.5, 0.3 }
 local NEEDLE_COLOR = { 0.91, 0.96, 1 }
@@ -48,7 +46,6 @@ local function CreateCircle(frame, layer, sublevel, size)
 	return texture
 end
 
--- Returns a dial: { name, Render(self, t), SetUnit(self, unit) }.
 function DialLines.Create(frame)
 	local face = CreateCircle(frame, "BACKGROUND", 0, FACE_SIZE)
 
@@ -86,7 +83,7 @@ function DialLines.Create(frame)
 		local cold, hot = Model.Extremes(t)
 		local tint = cold > 0 and RING_COLD or RING_HOT
 		local k = math.max(cold, hot)
-		-- Gold multiplied by blue gives olive, so the ring loses its gold before it turns icy.
+		-- Gold times blue gives olive, so the ring fades before it turns icy.
 		ring:SetDesaturation(cold)
 		ring:SetVertexColor(Lerp(1, tint[1], k), Lerp(1, tint[2], k), Lerp(1, tint[3], k))
 
@@ -103,7 +100,7 @@ function DialLines.Create(frame)
 		unitText:SetText(DEGREE .. (unit == "F" and "F" or "C"))
 	end
 
-	-- The built-in gold ring suits a classic-style minimap as well.
+	-- The gold ring also fits a classic minimap.
 	function dial:SetClassic() end
 
 	return dial
