@@ -7,6 +7,7 @@ ns.DEFAULTS = {
 	label = "hover",
 	locked = false,
 	race = true,
+	undead = "numb",
 	-- Default gauge size for Forever and Retail.
 	scale = ns.Sensors.isForever and 0.53 or 0.45,
 }
@@ -63,13 +64,16 @@ local function InitDB()
 	return FeelsLikeDB
 end
 
--- The body that feels the weather: none with the race setting off, then fur or the race.
+-- The body that feels the weather: none with the race setting off, then fur, the undead choice or the race.
 local function ChooseBody(state)
 	state.raceOff = not FeelsLikeDB.race
 	if state.raceOff then
 		return nil
 	elseif state.form and ns.FurForms[state.form] then
 		return ns.Fur
+	elseif state.race == "Scourge" then
+		state.undead = ns.UndeadFeel[FeelsLikeDB.undead] and FeelsLikeDB.undead or ns.DEFAULTS.undead
+		return ns.UndeadFeel[state.undead]
 	end
 	return state.race and ns.Races[state.race]
 end
@@ -206,7 +210,13 @@ local function PrintDebug()
 	if s.raceOff then
 		race = race .. ", off in settings"
 	elseif s.body then
+		if s.undead then
+			race = race .. ", " .. ns.UndeadFeelNames[s.undead]:lower()
+		end
 		race = string.format("%s, cold x%.2f, heat x%.2f", race, s.body.cold, s.body.heat)
+		if s.body.shift then
+			race = race .. string.format(", shift %+d", s.body.shift)
+		end
 	elseif s.race then
 		race = race .. ", not in the table, feels like a human"
 	end

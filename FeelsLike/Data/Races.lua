@@ -1,9 +1,10 @@
 -- How strongly each race feels the cold and the heat. 1 is like a human. Keys are UnitRace's English names.
+-- A shift moves the whole feel, for a body that runs cold.
 
 local _, ns = ...
 
-local function Body(cold, heat)
-	return { cold = cold, heat = heat }
+local function Body(cold, heat, shift)
+	return { cold = cold, heat = heat, shift = shift }
 end
 
 ns.Races = {
@@ -17,6 +18,15 @@ ns.Races = {
 	Troll = Body(1.2, 0.8),
 	Skyborne = Body(1, 1), -- both factions
 }
+
+-- The undead choose how they feel. Numb is the default.
+ns.UndeadFeel = {
+	numb = ns.Races.Scourge,
+	cold = Body(0.4, 0.4, -40), -- runs cold: chilly almost everywhere
+	living = Body(1, 1),
+}
+ns.UndeadFeelNames = { numb = "Numb", cold = "Always cold", living = "Like the living" }
+ns.UndeadFeelOrder = { "numb", "cold", "living" } -- as the settings list them
 
 -- Forms with fur feel like a tauren. Keys are GetShapeshiftFormID's IDs.
 ns.Fur = Body(0.75, 1.15)

@@ -186,6 +186,15 @@ near("damp warm tauren by a fire", Model.Compute(state({ base = 44, campfire = 1
 	Model.Compute(state({ base = 44, body = tauren }), 0.01).target)
 -- Below the ceiling the fire row stays as before.
 near("dwarf by a fire at night", Model.Compute(state({ base = -68, campfire = 1, body = dwarf }), 0).target, -24.75)
+-- A body that runs cold.
+local runsCold = { cold = 0.4, heat = 0.4, shift = -40 }
+near("shift on the cold side", Model.BodyFeel(-88, runsCold), -75.2)
+near("shift on the warm side", Model.BodyFeel(15, runsCold), -34)
+near("shift at mild", Model.BodyFeel(0, runsCold), -40)
+near("runs cold in a desert", Model.Compute(state({ base = 105, body = runsCold }), 0).target, 2)
+near("runs cold by a fire", Model.Compute(state({ base = 15, campfire = 1, body = runsCold }), 0).target, -22)
+check("runs cold by a fire is cozy", Model.Compute(state({ base = 15, campfire = 1, body = runsCold }), 0).cozy, true)
+near("runs cold in lava", Model.Compute(state({ base = 15, burning = 1, body = runsCold }), 0).target, 100)
 -- Every Forever race is in the table, and every entry has both factors.
 assert(loadfile("FeelsLike/Data/Races.lua"))("FeelsLike", ns)
 for _, race in ipairs({ "Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll", "Skyborne" }) do
@@ -195,9 +204,23 @@ local bodies = { Fur = ns.Fur }
 for name, body in pairs(ns.Races) do
 	bodies[name] = body
 end
+for name, body in pairs(ns.UndeadFeel) do
+	bodies["undead " .. name] = body
+	check("undead choice has a name: " .. name, type(ns.UndeadFeelNames[name]) == "string", true)
+end
 for name, body in pairs(bodies) do
 	check("body factors: " .. name, type(body.cold) == "number" and body.cold > 0
-		and type(body.heat) == "number" and body.heat > 0, true)
+		and type(body.heat) == "number" and body.heat > 0
+		and (body.shift == nil or type(body.shift) == "number"), true)
+end
+check("numb is the race's own body", ns.UndeadFeel.numb, ns.Races.Scourge)
+local listed = {}
+for _, name in ipairs(ns.UndeadFeelOrder) do
+	check("listed undead choice exists: " .. name, ns.UndeadFeel[name] ~= nil, true)
+	listed[name] = true
+end
+for name in pairs(ns.UndeadFeel) do
+	check("undead choice is listed: " .. name, listed[name], true)
 end
 for id, name in pairs(ns.FurForms) do
 	check("fur form " .. id, type(id) == "number" and type(name) == "string", true)

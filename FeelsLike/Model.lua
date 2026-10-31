@@ -249,12 +249,12 @@ function Model.DayNight(hour, climate)
 	return -swing.night * depth
 end
 
--- Scales the distance from Mild by the body's cold or heat factor. No body is like a human.
+-- Scales the distance from Mild by the body's cold or heat factor, then adds its shift. No body is like a human.
 function Model.BodyFeel(t, body)
 	if not body then
 		return t
 	end
-	return t * (t < 0 and body.cold or body.heat)
+	return t * (t < 0 and body.cold or body.heat) + (body.shift or 0)
 end
 
 -- Returns the room temperature and the share of outside air that gets in.

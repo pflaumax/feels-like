@@ -39,6 +39,7 @@ Open Options, then AddOns, then Feels Like. You can
 - switch between Celsius and Fahrenheit
 - show the word on hover, always or never
 - choose whether your race changes how you feel
+- choose how the undead feel: numb, always cold or like the living
 - lock the gauge in place
 - change its size
 - put it back by the minimap
@@ -70,7 +71,7 @@ Open Options, then AddOns, then Feels Like. You can
 
 **Which versions of the game?** It's made for WoW Forever. It also loads on Retail, but there only a few old zones have a climate, so most places read as Mild.
 
-**My undead should feel the cold.** Turn off Feel by race in the settings, and your character feels the weather like a human.
+**My undead should feel the cold.** Pick how the undead feel in the settings: Numb (they hardly feel the weather), Always cold (their bodies run cold) or Like the living.
 
 **A zone feels wrong.** Stand there, type `/feels debug` and send me what it prints. Ideas for what should make you colder or warmer are always welcome too.
 

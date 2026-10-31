@@ -280,8 +280,9 @@ for _, layer in ipairs(vectorLayers) do
 	end
 end
 check("defaults saved", FeelsLikeDB.unit == "C" and FeelsLikeDB.label == "hover" and FeelsLikeDB.locked == false and FeelsLikeDB.scale == 0.53
-	and FeelsLikeDB.race == true)
+	and FeelsLikeDB.race == true and FeelsLikeDB.undead == "numb")
 check("race setting registered", settings.FEELSLIKE_RACE ~= nil)
+check("undead setting registered", settings.FEELSLIKE_UNDEAD ~= nil)
 check("one ticker", #tickers == 1, #tickers)
 
 -- Dun Morogh before dawn in snow.
@@ -1250,6 +1251,7 @@ check("0.45 chosen after the move stays", FeelsLikeDB.scale == 0.45, FeelsLikeDB
 ns = LoadAddon(false, { scale = 0.45 })
 check("retail keeps 0.45", FeelsLikeDB.scale == 0.45, FeelsLikeDB.scale)
 check("old save gets the race setting", FeelsLikeDB.race == true, FeelsLikeDB.race)
+check("old save gets the undead setting", FeelsLikeDB.undead == "numb", FeelsLikeDB.undead)
 
 -- Humid air in Stranglethorn on a clear afternoon.
 ns = LoadAddon(true)
@@ -1290,7 +1292,23 @@ check("debug shows the race", debugText:find("race Dwarf, cold x0.75, heat x1.00
 check("undead still cold", math.abs(RaceTarget("Scourge", "Undead") - (-44)) < 0.01
 	and ns.Model.Band(ns.Gauge.target).word == "Cold", ns.Gauge.target)
 debugText = Slash("debug")
-check("debug adds the local name", debugText:find("race Scourge (Undead), cold x0.50, heat x0.60: +44.0", 1, true), debugText)
+check("debug adds the local name", debugText:find("race Scourge (Undead), numb, cold x0.50, heat x0.60: +44.0", 1, true), debugText)
+-- The undead choose how they feel.
+FeelsLikeDB.undead = "cold"
+check("undead always cold", math.abs(RaceTarget("Scourge", "Undead") - (-75.2)) < 0.01, ns.Gauge.target)
+debugText = Slash("debug")
+check("debug says always cold", debugText:find("race Scourge (Undead), always cold, cold x0.40, heat x0.40, shift -40: +12.8", 1, true), debugText)
+FeelsLikeDB.undead = "living"
+check("undead like the living", math.abs(RaceTarget("Scourge", "Undead") - (-88)) < 0.01, ns.Gauge.target)
+check("debug says like the living", Slash("debug"):find("race Scourge (Undead), like the living, cold x1.00, heat x1.00: +0.0", 1, true))
+FeelsLikeDB.undead = "zombie"
+check("a bad undead value is numb", math.abs(RaceTarget("Scourge", "Undead") - (-44)) < 0.01, ns.Gauge.target)
+FeelsLikeDB.undead = "cold"
+check("the undead choice leaves dwarves alone", math.abs(RaceTarget("Dwarf") - (-66)) < 0.01, ns.Gauge.target)
+FeelsLikeDB.race = false
+check("race off wins over the undead choice", math.abs(RaceTarget("Scourge", "Undead") - (-88)) < 0.01, ns.Gauge.target)
+FeelsLikeDB.race = true
+FeelsLikeDB.undead = "numb"
 RaceTarget("Dwarf", "Nain")
 check("debug adds a translated name", Slash("debug"):find("race Dwarf (Nain), cold x0.75", 1, true))
 check("troll clamped at the bottom", RaceTarget("Troll") == -100, ns.Gauge.target)

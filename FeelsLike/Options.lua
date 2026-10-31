@@ -24,6 +24,14 @@ local function LabelOptions()
 	return container:GetData()
 end
 
+local function UndeadOptions()
+	local container = Settings.CreateControlTextContainer()
+	for _, key in ipairs(ns.UndeadFeelOrder) do
+		container:Add(key, ns.UndeadFeelNames[key])
+	end
+	return container:GetData()
+end
+
 local function FormatScale(value)
 	return string.format("%.2f", value)
 end
@@ -51,6 +59,11 @@ function Options:Register(db)
 		Settings.VarType.Boolean, "Feel by race", defaults.race)
 	Settings.CreateCheckbox(category, race,
 		"Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either. Druids in cat, bear, travel or moonkin form have fur, like tauren.")
+
+	local undead = Settings.RegisterAddOnSetting(category, "FEELSLIKE_UNDEAD", "undead", db,
+		Settings.VarType.String, "Undead feel", defaults.undead)
+	Settings.CreateDropdown(category, undead, UndeadOptions,
+		"Only for undead characters, while Feel by race is on. Numb: they hardly feel the weather. Always cold: their bodies run cold, so they feel chilly almost everywhere. Like the living: they feel the weather like a human.")
 
 	local locked = Settings.RegisterAddOnSetting(category, "FEELSLIKE_LOCKED", "locked", db,
 		Settings.VarType.Boolean, "Lock position", defaults.locked)
