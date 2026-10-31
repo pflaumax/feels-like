@@ -130,6 +130,9 @@ check("inn cozy", Model.Compute(state({ base = 5, indoors = true, inn = true }),
 check("campfire too hot not cozy", Model.Compute(state({ base = 75, campfire = 1 }), 0).cozy, false)
 check("campfire still cold not cozy", Model.Compute(state({ base = -100, campfire = 1 }), 0).cozy, false)
 check("outdoors not cozy", Model.Compute(state({ base = 0 }), 0).cozy, false)
+check("inn reported", Model.Compute(state({ base = 5, indoors = true, inn = true }), 0).inn, true)
+check("no inn in an instance", Model.Compute(state({ base = 5, indoors = true, inn = true, inInstance = true }), 0).inn, false)
+check("no inn outdoors", Model.Compute(state({ base = 5 }), 0).inn, false)
 
 -- Humid air
 near("humid jungle afternoon", Model.Compute(state({ base = 45, climate = "tropical", hour = 15 }), 0).target, 58.75)

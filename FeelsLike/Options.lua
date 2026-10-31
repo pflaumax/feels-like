@@ -65,6 +65,11 @@ function Options:Register(db)
 	Settings.CreateDropdown(category, undead, UndeadOptions,
 		"Only for undead characters, while Feel by race is on. Numb: they hardly feel the weather. Always cold: their bodies run cold, so they feel chilly almost everywhere. Like the living: they feel the weather like a human.")
 
+	local flavor = Settings.RegisterAddOnSetting(category, "FEELSLIKE_FLAVOR", "flavor", db,
+		Settings.VarType.Boolean, "Flavor lines in chat", defaults.flavor)
+	Settings.CreateCheckbox(category, flavor,
+		"Now and then a short line in chat, only for you, when your character starts to feel the cold, the heat or Cozy.")
+
 	local locked = Settings.RegisterAddOnSetting(category, "FEELSLIKE_LOCKED", "locked", db,
 		Settings.VarType.Boolean, "Lock position", defaults.locked)
 	locked:SetValueChangedCallback(function(_, value)

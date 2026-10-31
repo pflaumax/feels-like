@@ -74,6 +74,8 @@ end
 ResetWorld()
 
 local printed = {}
+-- Flavor lines sent to the chat frame.
+local chatLines = {}
 local timers, tickers = {}, {}
 local loadedCallback
 
@@ -92,6 +94,8 @@ local function InstallGlobals(forever)
 		return unpack(out)
 	end
 
+	_G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, text, r, g, b) chatLines[#chatLines + 1] = { text = text, r = r, g = g, b = b } end }
+	_G.ChatTypeInfo = { EMOTE = { r = 1, g = 0.5, b = 0.25 } }
 	_G.UIParent = Widget()
 	_G.GameTooltip = Widget()
 	_G.GameTooltip.IsOwned = function() return false end
@@ -103,6 +107,7 @@ local function InstallGlobals(forever)
 	end
 	_G.Minimap = Widget()
 	_G.InCombatLockdown = function() return world.combat end
+	_G.UnitIsDeadOrGhost = function() return world.dead end
 	_G.GetTime = function() return world.time end
 	_G.UnitPosition = function() return world.pos.y, world.pos.x, 0, world.pos.map end
 	_G.GetUnitSpeed = function() return world.speed end
@@ -191,6 +196,7 @@ local function LoadAddon(forever, saved)
 	ResetWorld()
 	_G.FeelsLikeDB = saved
 	printed, timers, tickers, loadedCallback = {}, {}, {}, nil
+	chatLines = {}
 	createdFrames, vectorLayers = {}, {}
 	local settings = InstallGlobals(forever)
 	local ns = {}
@@ -1274,6 +1280,137 @@ world.swimming = false
 Tick(46) -- the first tick still counts the swim
 debugText = Slash("debug")
 check("humid air keeps the normal drying pace", debugText:find("wetness 0.50", 1, true), debugText)
+
+-- Flavor lines, in Dun Morogh before dawn in snow (Freezing).
+local function LastLine()
+	return chatLines[#chatLines] and chatLines[#chatLines].text
+end
+local function GoMild()
+	world.mapID, world.zoneText, world.weather = 1429, "Elwynn Forest", { type = 0, intensity = 0 }
+end
+local function GoFreezing()
+	world.mapID, world.zoneText, world.weather = 1426, "Dun Morogh", { type = 2, intensity = 1 }
+end
+-- Loads and waits out the quiet moment after login.
+local function LoadQuietly(saved)
+	ns, settings = LoadAddon(true, saved)
+	Tick(10)
+end
+ns, settings = LoadAddon(true)
+check("flavor on by default", FeelsLikeDB.flavor == true)
+check("flavor setting registered", settings.FEELSLIKE_FLAVOR ~= nil)
+Tick(10)
+check("the word at login says nothing", #chatLines == 0, #chatLines)
+GoMild()
+Tick(2)
+check("mild says nothing", #chatLines == 0, #chatLines)
+GoFreezing()
+Tick(3)
+check("no line before the word settles", #chatLines == 0, #chatLines)
+Tick(1)
+check("a line once the word holds", #chatLines == 1 and LastLine() == "You shiver from the cold. (/shiver)", LastLine())
+check("the line has the emote color", chatLines[1] and chatLines[1].r == 1 and chatLines[1].g == 0.5 and chatLines[1].b == 0.25)
+check("debug names the last line", Slash("debug"):find("flavor lines on, last: Freezing 0 s ago", 1, true))
+Tick(20 * 60)
+check("no second line while the word holds", #chatLines == 1, #chatLines)
+GoMild()
+Tick(60)
+GoFreezing()
+Tick(4)
+check("the word again after the cooldown, the next line", #chatLines == 2 and LastLine() == "Your teeth chatter. You need a fire.", LastLine())
+GoMild()
+Tick(60)
+GoFreezing()
+Tick(20 * 60)
+check("back within the cooldown stays quiet", #chatLines == 2, #chatLines)
+-- Fire underfoot has its own lines.
+for _ = 1, 4 do
+	FireHit(4)
+	Tick(2)
+end
+check("fire underfoot line", LastLine() == "Ouch! That burns!", LastLine())
+check("debug names fire underfoot", Slash("debug"):find("last: Scorching from fire underfoot", 1, true))
+-- The game reports the place late at login: what comes within the quiet moment is no change.
+LoadQuietly()
+GoMild()
+Tick(20 * 60)
+CoreEvent("PLAYER_ENTERING_WORLD", false, true) -- a /reload
+GoFreezing()
+Tick(9)
+check("the place found after a reload says nothing", #chatLines == 0, #chatLines)
+Tick(20)
+check("it stays quiet after the quiet moment", #chatLines == 0, #chatLines)
+-- A loading screen that moved you is a real change.
+GoMild()
+Tick(2)
+CoreEvent("PLAYER_ENTERING_WORLD", false, false)
+GoFreezing()
+Tick(4)
+check("a hearth into the cold speaks", #chatLines == 1, #chatLines)
+-- Cold, then Freezing within the minute: the second waits for the minute.
+LoadQuietly()
+world.hour, world.weather = 15, { type = 0, intensity = 0 }
+Tick(4)
+check("cold line", #chatLines == 1 and LastLine() == "A chill runs down your back.", LastLine())
+world.hour = 5
+Tick(4)
+check("the next word waits for the minute", #chatLines == 1, #chatLines)
+Tick(60)
+check("then it speaks", #chatLines == 2 and LastLine() == "You shiver from the cold. (/shiver)", LastLine())
+-- Nothing in combat, the line after it.
+LoadQuietly()
+GoMild()
+Tick(1)
+world.combat = true
+GoFreezing()
+Tick(10)
+check("no line in combat", #chatLines == 0, #chatLines)
+world.combat = false
+Tick(1)
+check("the line after combat", #chatLines == 1, #chatLines)
+-- Nothing as a ghost, the line after coming back.
+LoadQuietly()
+GoMild()
+Tick(1)
+world.dead = true
+GoFreezing()
+Tick(10)
+check("no line as a ghost", #chatLines == 0, #chatLines)
+world.dead = false
+Tick(1)
+check("the line after coming back", #chatLines == 1, #chatLines)
+-- Nothing during a test.
+LoadQuietly()
+GoMild()
+Tick(1)
+Slash("test 50")
+GoFreezing()
+Tick(10)
+check("no line during a test", #chatLines == 0, #chatLines)
+Slash("test off")
+Tick(1)
+check("the line after the test", #chatLines == 1, #chatLines)
+-- The setting off drops the line; turned on, it waits for the next change.
+LoadQuietly({ flavor = false })
+GoMild()
+Tick(1)
+GoFreezing()
+Tick(10)
+check("no line with the setting off", #chatLines == 0, #chatLines)
+check("debug says flavor lines off", Slash("debug"):find("flavor lines off", 1, true))
+FeelsLikeDB.flavor = true
+Tick(10)
+check("turned on, an old word stays quiet", #chatLines == 0, #chatLines)
+GoMild()
+Tick(1)
+GoFreezing()
+Tick(4)
+check("turned on, the next change speaks", #chatLines == 1, #chatLines)
+-- Cozy in an inn.
+LoadQuietly()
+world.indoors, world.resting = true, true
+Tick(8)
+check("cozy inn line", #chatLines == 1 and LastLine() == "The warmth of the inn wraps around you.", LastLine())
 
 -- Race, in Dun Morogh before dawn in snow (-88 for a human).
 ns = LoadAddon(true)

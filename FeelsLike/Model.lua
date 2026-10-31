@@ -280,7 +280,8 @@ function Model.Compute(state, wetness)
 	r.humid = HUMID[state.climate] and math.max(0, air - HUMID_START) * HUMID_SHARE or 0
 	r.env = air + r.humid
 
-	local inn = InInn(state)
+	local inn = InInn(state) or false
+	r.inn = inn
 	local roomTemperature, outsideAir = Shelter(state)
 	r.sheltered = roomTemperature + (r.env - roomTemperature) * outsideAir
 

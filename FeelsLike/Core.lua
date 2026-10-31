@@ -8,6 +8,7 @@ ns.DEFAULTS = {
 	locked = false,
 	race = true,
 	undead = "numb",
+	flavor = true,
 	-- Default gauge size for Forever and Retail.
 	scale = ns.Sensors.isForever and 0.53 or 0.45,
 }
@@ -94,6 +95,9 @@ local function Update()
 		ns.Gauge:SetTarget(result.target)
 		ns.Gauge:SetCozy(result.cozy)
 	end
+	-- The character's own reaction, now and then. Combat, a test or a ghost hold it back for later.
+	local held = test ~= nil or InCombatLockdown() or UnitIsDeadOrGhost("player")
+	ns.Flavor.OnReading(result, state, now, held, not FeelsLikeDB.flavor)
 end
 
 -- For other addons. Read only.
@@ -224,6 +228,7 @@ local function PrintDebug()
 	print(string.format("  fire underfoot %.2f: %s", s.burning, Signed(r.burn)))
 	print(string.format("  felt %s, target %s: %s%s", Signed(r.felt), Signed(r.target), band.word,
 		test and " (test active, /feels test off)" or ""))
+	print("  flavor lines " .. ns.Flavor.Describe(GetTime(), FeelsLikeDB.flavor))
 	print("  renderer: " .. ns.Gauge.renderer)
 	print("  position: " .. ns.Gauge:DescribePosition())
 end
@@ -398,6 +403,9 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 		elseif event == "PLAYER_ENTERING_WORLD" then
 			local isInitialLogin, isReloadingUi = ...
 			ns.Sensors.OnLoadingScreen(not (isInitialLogin or isReloadingUi))
+			if isInitialLogin or isReloadingUi then
+				ns.Flavor.OnLogin(GetTime())
+			end
 		end
 		Update()
 	end)

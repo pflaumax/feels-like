@@ -30,6 +30,8 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see one word next to it, like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.
 
+Now and then your character reacts with a short line in chat that only you see, like "A chill runs down your back." when the cold sets in, or "You warm your hands by the fire." It never repeats itself often and stays quiet in combat.
+
 The gauge sits by the minimap. Hold Shift and drag it to move it anywhere you like.
 
 ## Settings
@@ -40,6 +42,7 @@ Open Options, then AddOns, then Feels Like. You can
 - show the word on hover, always or never
 - choose whether your race changes how you feel
 - choose how the undead feel: numb, always cold or like the living
+- turn the lines in chat on or off
 - lock the gauge in place
 - change its size
 - put it back by the minimap
