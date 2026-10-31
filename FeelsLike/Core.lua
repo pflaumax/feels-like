@@ -156,6 +156,20 @@ local function Signed(value)
 	return string.format("%+.1f", value)
 end
 
+local function DescribeResistances(resist)
+	if not resist then
+		return "not in this client"
+	end
+	local function One(name, value)
+		if not value then
+			return name .. " hidden"
+		end
+		return string.format("%s base %s, real %s, effective %s, bonus %s", name, tostring(value.base),
+			tostring(value.real), tostring(value.effective), tostring(value.bonus))
+	end
+	return One("frost", resist.frost) .. "; " .. One("fire", resist.fire)
+end
+
 local function PrintDebug()
 	if not lastState then
 		Update()
@@ -227,6 +241,7 @@ local function PrintDebug()
 	end
 	print(string.format("  race %s: %s", race, Signed(r.race)))
 	print(string.format("  fire underfoot %.2f: %s", s.burning, Signed(r.burn)))
+	print("  resistance, not counted yet: " .. DescribeResistances(ns.Sensors.ReadResistances()))
 	if s.dead then
 		print(string.format("  dead: the reading stays at %s until you are back", Signed(ns.Model.DEAD_FEEL)))
 	end

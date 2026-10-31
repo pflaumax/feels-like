@@ -464,6 +464,25 @@ function Sensors.OnLoadingScreen(moved)
 	campfireLoadedAt = GetTime()
 end
 
+-- Damage classes for UnitResistance.
+local FIRE_CLASS = 2
+local FROST_CLASS = 4
+
+-- Frost and fire resistance for /feels debug, to learn the values before they count. Nil without the API.
+function Sensors.ReadResistances()
+	if not UnitResistance then
+		return nil
+	end
+	local function Read(class)
+		local base, real, effective, bonus = UnitResistance("player", class)
+		if IsSecret(base) or IsSecret(real) or IsSecret(effective) or IsSecret(bonus) then
+			return nil
+		end
+		return { base = base, real = real, effective = effective, bonus = bonus }
+	end
+	return { frost = Read(FROST_CLASS), fire = Read(FIRE_CLASS) }
+end
+
 -- Shapeshift form ID, or nil in normal form.
 function Sensors.ReadForm()
 	local form = GetShapeshiftFormID and GetShapeshiftFormID()

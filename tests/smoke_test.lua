@@ -69,6 +69,7 @@ local function ResetWorld()
 		pos = { x = 0, y = 0, map = 0 }, speed = 0,
 		hands = {}, -- item IDs by slot
 		raceName = "Human", race = "Human", raceID = 1,
+		resist = {},
 	}
 end
 ResetWorld()
@@ -114,6 +115,8 @@ local function InstallGlobals(forever)
 	_G.GetInventoryItemID = function(_, slot) return world.hands[slot] end
 	_G.UnitRace = function() return world.raceName, world.race, world.raceID end
 	_G.GetShapeshiftFormID = function() return world.form end
+	-- base, real, effective and bonus by damage class.
+	_G.UnitResistance = function(_, class) return unpack(world.resist[class] or { 0, 0, 0, 0 }) end
 	_G.IsShiftKeyDown = function() return world.shift end
 	_G.SlashCmdList = {}
 
@@ -336,6 +339,21 @@ check("debug shows place", debugText:find("Dun Morogh (map 1426)", 1, true), deb
 
 check("debug shows game day/night", debugText:find("(game: night)", 1, true), debugText)
 check("debug shows renderer", debugText:find("renderer: vector", 1, true), debugText)
+check("debug shows no resistance", debugText:find("resistance, not counted yet: frost base 0, real 0, effective 0, bonus 0; fire base 0, real 0, effective 0, bonus 0", 1, true), debugText)
+world.resist[4], world.resist[2] = { 0, 15, 15, 15 }, { 5, 5, 5, 0 }
+debugText = Slash("debug")
+check("debug shows frost and fire resistance", debugText:find("frost base 0, real 15, effective 15, bonus 15; fire base 5, real 5, effective 5, bonus 0", 1, true), debugText)
+Tick(1)
+check("resistance does not count yet", math.abs(Gauge.target - (-88)) < 0.01, Gauge.target)
+local resistIsSecret = _G.issecretvalue
+_G.issecretvalue = function(value) return value == 15 end
+check("secret frost resistance is hidden", Slash("debug"):find("frost hidden; fire base 5", 1, true))
+_G.issecretvalue = resistIsSecret
+local realResistance = _G.UnitResistance
+_G.UnitResistance = nil
+check("no resistance API", Slash("debug"):find("resistance, not counted yet: not in this client", 1, true))
+_G.UnitResistance = realResistance
+world.resist = {}
 check("debug shows position", debugText:find("position: default", 1, true), debugText)
 -- A point next to the minimap.
 local gaugeForPosition = _G.FeelsLikeGauge
