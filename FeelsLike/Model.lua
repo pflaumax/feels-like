@@ -168,6 +168,9 @@ local CAMPFIRE_FADE = 4
 
 local FIRESIDE_DRY_TIME = 15 -- seconds to dry in an inn or by a fire
 
+-- The dead feel this cold everywhere, the same until they are back. Cold, just short of Freezing.
+Model.DEAD_FEEL = -65
+
 -- 1 for hold seconds, then fades to 0 over fade seconds.
 local function Fade(seconds, hold, fade)
 	if not seconds or seconds >= hold + fade then
@@ -309,6 +312,12 @@ function Model.Compute(state, wetness)
 	r.burn = math.max(0, (Model.MAX - beforeBurn) * (state.burning or 0))
 	r.felt = beforeBurn + r.burn
 	r.target = Model.Clamp(r.felt)
+
+	-- A ghost or a wisp feels nothing of the place.
+	if state.dead then
+		r.felt, r.target, r.cozy = Model.DEAD_FEEL, Model.DEAD_FEEL, false
+		return r
+	end
 
 	local segment = Model.SegmentIndex(r.target)
 	local byFire = (state.campfire or 0) >= 0.5

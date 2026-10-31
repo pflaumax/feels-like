@@ -134,6 +134,16 @@ check("inn reported", Model.Compute(state({ base = 5, indoors = true, inn = true
 check("no inn in an instance", Model.Compute(state({ base = 5, indoors = true, inn = true, inInstance = true }), 0).inn, false)
 check("no inn outdoors", Model.Compute(state({ base = 5 }), 0).inn, false)
 
+-- Dead
+near("a ghost feels cold", Model.Compute(state({ base = -60, dead = true }), 0).target, Model.DEAD_FEEL)
+near("a ghost in the desert too", Model.Compute(state({ base = 105, dead = true }), 0).target, Model.DEAD_FEEL)
+check("a ghost by a fire is not cozy", Model.Compute(state({ base = 15, campfire = 1, dead = true }), 0).cozy, false)
+check("a ghost in an inn is not cozy", Model.Compute(state({ base = 5, indoors = true, inn = true, dead = true }), 0).cozy, false)
+near("a ghost does not burn", Model.Compute(state({ base = 0, burning = 1, dead = true }), 0).target, Model.DEAD_FEEL)
+near("a ghost has no race", Model.Compute(state({ base = -60, dead = true, body = { cold = 1.2, heat = 0.8 } }), 0).target, Model.DEAD_FEEL)
+check("the ghost's cold is Cold, not Freezing", Model.Band(Model.DEAD_FEEL).word, "Cold")
+check("the ghost's cold has no icy ring", (Model.Extremes(Model.DEAD_FEEL)), 0)
+
 -- Humid air
 near("humid jungle afternoon", Model.Compute(state({ base = 45, climate = "tropical", hour = 15 }), 0).target, 58.75)
 near("humid step", Model.Compute(state({ base = 45, climate = "tropical", hour = 15 }), 0).humid, 7.75)

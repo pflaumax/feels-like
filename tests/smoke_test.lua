@@ -1377,7 +1377,7 @@ GoFreezing()
 Tick(10)
 check("no line as a ghost", #chatLines == 0, #chatLines)
 world.dead = false
-Tick(1)
+Tick(4) -- back from the ghost's Cold, the real word settles first
 check("the line after coming back", #chatLines == 1, #chatLines)
 -- Nothing during a test.
 LoadQuietly()
@@ -1411,6 +1411,31 @@ LoadQuietly()
 world.indoors, world.resting = true, true
 Tick(8)
 check("cozy inn line", #chatLines == 1 and LastLine() == "The warmth of the inn wraps around you.", LastLine())
+
+-- Dead: the same cold everywhere until you are back.
+ns = LoadAddon(true)
+world.dead = true
+Tick(1)
+check("a ghost feels cold", ns.Gauge.target == -65 and ns.Gauge.cozy == false, ns.Gauge.target)
+local ghostValue, ghostWord = FeelsLike.GetTemperature()
+check("api gives the ghost's cold", ghostValue == -65 and ghostWord == "Cold", tostring(ghostValue) .. " " .. tostring(ghostWord))
+check("debug says dead", Slash("debug"):find("dead: the reading stays at -65.0 until you are back", 1, true))
+world.mapID, world.zoneText, world.hour = 1446, "Tanaris", 15
+world.weather = { type = 0, intensity = 0 }
+Tick(1)
+check("a ghost in the desert feels the same", ns.Gauge.target == -65, ns.Gauge.target)
+world.indoors, world.resting = true, true
+Tick(3)
+check("a ghost in an inn is not cozy", ns.Gauge.target == -65 and ns.Gauge.cozy == false, ns.Gauge.target)
+world.indoors, world.resting = false, false
+world.swimming = true
+Tick(3)
+world.swimming = false
+world.dead = false
+Tick(1)
+check("a ghost's swim leaves the body dry", Slash("debug"):find("wetness 0.00", 1, true))
+check("back alive, the desert again", ns.Gauge.target > 90, ns.Gauge.target)
+check("debug no longer says dead", not Slash("debug"):find("dead:", 1, true))
 
 -- Race, in Dun Morogh before dawn in snow (-88 for a human).
 ns = LoadAddon(true)

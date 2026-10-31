@@ -26,6 +26,8 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 **Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either. Druids in cat, bear, travel or moonkin form have fur, like tauren. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
 
+**Death.** While you are dead, a ghost or a wisp, you feel Cold, the same everywhere, until you are back.
+
 ## Reading the gauge
 
 Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see one word next to it, like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.

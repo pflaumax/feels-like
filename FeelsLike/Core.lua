@@ -82,7 +82,8 @@ end
 local function Update()
 	-- Update how wet the clothes are since the last update.
 	local now = GetTime()
-	if lastState then
+	-- A ghost's swim leaves the body dry.
+	if lastState and not lastState.dead then
 		wetness = ns.Model.UpdateWetness(wetness, now - lastUpdate, lastState, lastResult.drying + lastResult.burn)
 	end
 	lastUpdate = now
@@ -96,7 +97,7 @@ local function Update()
 		ns.Gauge:SetCozy(result.cozy)
 	end
 	-- The character's own reaction, now and then. Combat, a test or a ghost hold it back for later.
-	local held = test ~= nil or InCombatLockdown() or UnitIsDeadOrGhost("player")
+	local held = test ~= nil or InCombatLockdown() or state.dead
 	ns.Flavor.OnReading(result, state, now, held, not FeelsLikeDB.flavor)
 end
 
@@ -226,6 +227,9 @@ local function PrintDebug()
 	end
 	print(string.format("  race %s: %s", race, Signed(r.race)))
 	print(string.format("  fire underfoot %.2f: %s", s.burning, Signed(r.burn)))
+	if s.dead then
+		print(string.format("  dead: the reading stays at %s until you are back", Signed(ns.Model.DEAD_FEEL)))
+	end
 	print(string.format("  felt %s, target %s: %s%s", Signed(r.felt), Signed(r.target), band.word,
 		test and " (test active, /feels test off)" or ""))
 	print("  flavor lines " .. ns.Flavor.Describe(GetTime(), FeelsLikeDB.flavor))

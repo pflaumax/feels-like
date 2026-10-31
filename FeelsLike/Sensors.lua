@@ -511,6 +511,9 @@ function Sensors.Read()
 	state.race = race
 	state.raceName = not IsSecret(raceName) and raceName or nil
 	state.form = Sensors.ReadForm()
+	-- Dead, before or after the release: a ghost or a wisp.
+	local dead = UnitIsDeadOrGhost("player")
+	state.dead = not IsSecret(dead) and dead or false
 	state.burning = ns.Model.Burning(lastFireHit and GetTime() - lastFireHit, state.swimming)
 	return state
 end
