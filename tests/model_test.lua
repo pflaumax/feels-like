@@ -131,6 +131,27 @@ check("campfire too hot not cozy", Model.Compute(state({ base = 75, campfire = 1
 check("campfire still cold not cozy", Model.Compute(state({ base = -100, campfire = 1 }), 0).cozy, false)
 check("outdoors not cozy", Model.Compute(state({ base = 0 }), 0).cozy, false)
 
+-- Humid air
+near("humid jungle afternoon", Model.Compute(state({ base = 45, climate = "tropical", hour = 15 }), 0).target, 58.75)
+near("humid step", Model.Compute(state({ base = 45, climate = "tropical", hour = 15 }), 0).humid, 7.75)
+near("humid jungle night", Model.Compute(state({ base = 45, climate = "tropical", hour = 5 }), 0).target, 43.75)
+near("humid below the start", Model.Compute(state({ base = 15, climate = "tropical", hour = 5 }), 0).target, 9)
+near("humid at the start", Model.Compute(state({ base = 20, climate = "tropical", hour = 9 }), 0).humid, 0)
+near("humid just above the start", Model.Compute(state({ base = 21, climate = "tropical", hour = 9 }), 0).humid, 0.25)
+near("no humid air without the climate", Model.Compute(state({ base = 60, climate = "none" }), 0).humid, 0)
+-- Humid air dries nothing: Un'Goro before dawn dries like the plain 49, not the felt 56.
+local ungoroNight = state({ base = 55, climate = "tropical", hour = 5 })
+near("humid night feels hotter", Model.Compute(ungoroNight, 0).dry, 56.25)
+near("humid night dries like the plain air", Model.Compute(ungoroNight, 0).drying, 49)
+near("plain air dries at the normal pace", Model.UpdateWetness(1, 45, ungoroNight, Model.Compute(ungoroNight, 0).drying), 0.5)
+near("humid air in a building dries like the plain air", Model.Compute(state({ base = 55, climate = "tropical", hour = 5, indoors = true }), 0).drying, 28.6)
+near("dry air dries as it feels", Model.Compute(state({ base = 60, climate = "arid", hour = 0 }), 0).drying,
+	Model.Compute(state({ base = 60, climate = "arid", hour = 0 }), 0).dry)
+near("dry heat is not humid", Model.Compute(state({ base = 60, climate = "arid", hour = 0 }), 0).humid, 0)
+near("rain first, then humid", Model.Compute(state({ base = 45, climate = "tropical", hour = 15, weather = "rain", weatherIntensity = 1 }), 0).target, 43.75)
+near("humid in a building", Model.Compute(state({ base = 45, climate = "tropical", hour = 15, indoors = true }), 0).target, 32.5)
+near("troll feels humid heat less", Model.Compute(state({ base = 45, climate = "tropical", hour = 15, body = { cold = 1.2, heat = 0.8 } }), 0).target, 47)
+
 -- Race
 local dwarf = { cold = 0.75, heat = 1 }
 local undead = { cold = 0.5, heat = 0.6 }

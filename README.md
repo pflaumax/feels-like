@@ -8,7 +8,7 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 ## What changes how you feel
 
-**Zone.** Every zone has its own climate. Dun Morogh is cold, Tanaris is scorching and Elwynn is mild. Some places are special, like the hot springs of Winterspring, the lava of the Cauldron or Molten Core.
+**Zone.** Every zone has its own climate. Dun Morogh is cold, Tanaris is scorching and Elwynn is mild. In humid jungles and swamps like Stranglethorn and Un'Goro the heat feels stronger. Some places are special, like the hot springs of Winterspring, the lava of the Cauldron or Molten Core.
 
 **Time of day.** Deserts burn in the afternoon and cool down at night. The coldest moment is just before dawn.
 

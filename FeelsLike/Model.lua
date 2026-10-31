@@ -118,6 +118,11 @@ Model.WEATHER_DELTA = {
 	sandstorm = 10,
 }
 
+-- Humid air feels hotter: above the start it adds a share of the heat over it.
+local HUMID = { tropical = true }
+local HUMID_START = 20
+local HUMID_SHARE = 0.25
+
 -- Server time. Day is from 9 to 21 and warmest at 15.
 local DAY_START = 9
 local DAY_END = 21
@@ -252,6 +257,18 @@ function Model.BodyFeel(t, body)
 	return t * (t < 0 and body.cold or body.heat)
 end
 
+-- Returns the room temperature and the share of outside air that gets in.
+local function Shelter(state)
+	if HasOwnShelter(state) then
+		return 0, 1
+	elseif InInn(state) then
+		return INN_ROOM, INN_FACTOR
+	elseif state.indoors then
+		return INDOOR_ROOM, INDOOR_FACTOR
+	end
+	return 0, 1
+end
+
 -- Felt temperature from the game state and wetness. Returns every step for /feels debug.
 function Model.Compute(state, wetness)
 	local r = {}
@@ -259,18 +276,13 @@ function Model.Compute(state, wetness)
 	-- No weather in places that are fully inside.
 	local weather = not state.inside and state.weather
 	r.weather = weather and (Model.WEATHER_DELTA[weather] or 0) * state.weatherIntensity or 0
-	r.env = state.base + r.dayNight + r.weather
+	local air = state.base + r.dayNight + r.weather
+	r.humid = HUMID[state.climate] and math.max(0, air - HUMID_START) * HUMID_SHARE or 0
+	r.env = air + r.humid
 
 	local inn = InInn(state)
-	if HasOwnShelter(state) then
-		r.sheltered = r.env
-	elseif inn then
-		r.sheltered = INN_ROOM + (r.env - INN_ROOM) * INN_FACTOR
-	elseif state.indoors then
-		r.sheltered = INDOOR_ROOM + (r.env - INDOOR_ROOM) * INDOOR_FACTOR
-	else
-		r.sheltered = r.env
-	end
+	local roomTemperature, outsideAir = Shelter(state)
+	r.sheltered = roomTemperature + (r.env - roomTemperature) * outsideAir
 
 	-- An inn is already warm, and water puts a torch out.
 	local campfire = inn and 0 or (state.campfire or 0)
@@ -279,6 +291,8 @@ function Model.Compute(state, wetness)
 	r.campfire = math.min(CAMPFIRE_WARMTH * campfire, room)
 	r.torch = torch and math.min(TORCH_WARMTH, room - r.campfire) or 0
 	r.dry = r.sheltered + r.campfire + r.torch
+	-- Humid air feels hotter, but it dries nothing.
+	r.drying = r.dry - r.humid * outsideAir
 	r.wet = -WET_CHILL * wetness * math.max(0, r.dry - Model.MIN)
 	-- The body feels the cold and the heat by race. Fire underfoot burns everyone alike.
 	local unscaled = r.dry + r.wet

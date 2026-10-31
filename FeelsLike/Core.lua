@@ -67,7 +67,7 @@ local function Update()
 	-- Update how wet the clothes are since the last update.
 	local now = GetTime()
 	if lastState then
-		wetness = ns.Model.UpdateWetness(wetness, now - lastUpdate, lastState, lastResult.dry + lastResult.burn)
+		wetness = ns.Model.UpdateWetness(wetness, now - lastUpdate, lastState, lastResult.drying + lastResult.burn)
 	end
 	lastUpdate = now
 
@@ -162,6 +162,7 @@ local function PrintDebug()
 			s.weather or "clear", s.weatherIntensity, Signed(r.weather),
 			tostring(info and info.type), tostring(info and info.intensity)))
 	end
+	print(string.format("  humid air: %s", Signed(r.humid)))
 	local ownShelter = ns.Model.HasOwnShelter(s)
 	local shelter = ownShelter and (s.inInstance and "instance" or "inside as a whole") .. ", no shelter"
 		or s.shelter

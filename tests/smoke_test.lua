@@ -1250,6 +1250,28 @@ ns = LoadAddon(false, { scale = 0.45 })
 check("retail keeps 0.45", FeelsLikeDB.scale == 0.45, FeelsLikeDB.scale)
 check("old save gets the race setting", FeelsLikeDB.race == true, FeelsLikeDB.race)
 
+-- Humid air in Stranglethorn on a clear afternoon.
+ns = LoadAddon(true)
+world.mapID, world.zoneText, world.hour = 1434, "Stranglethorn Vale", 15
+world.weather = { type = 0, intensity = 0 }
+Tick(1)
+check("stranglethorn feels humid", math.abs(ns.Gauge.target - 58.75) < 0.01, ns.Gauge.target)
+debugText = Slash("debug")
+check("debug shows humid air", debugText:find("humid air: +7.8", 1, true), debugText)
+world.mapID, world.zoneText, world.hour = 1426, "Dun Morogh", 5
+world.weather = { type = 2, intensity = 1 }
+Tick(1)
+check("no humid air in the snow", Slash("debug"):find("humid air: +0.0", 1, true))
+-- Humid air dries nothing: after a swim in Un'Goro before dawn clothes dry at the plain air's pace.
+world.mapID, world.zoneText, world.hour = 1449, "Un'Goro Crater", 5
+world.weather = { type = 0, intensity = 0 }
+world.swimming = true
+Tick(2)
+world.swimming = false
+Tick(46) -- the first tick still counts the swim
+debugText = Slash("debug")
+check("humid air keeps the normal drying pace", debugText:find("wetness 0.50", 1, true), debugText)
+
 -- Race, in Dun Morogh before dawn in snow (-88 for a human).
 ns = LoadAddon(true)
 -- English name, and the local one when it differs.
