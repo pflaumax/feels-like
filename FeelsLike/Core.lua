@@ -85,6 +85,17 @@ local function Update()
 	end
 end
 
+-- For other addons. Read only.
+FeelsLike = { API_VERSION = 1 }
+
+-- Returns the felt temperature from -100 to 100, the word and whether it is Cozy. Nil before the first reading.
+function FeelsLike.GetTemperature()
+	if not lastResult then
+		return nil
+	end
+	return lastResult.target, ns.Model.Band(lastResult.target, lastResult.cozy).word, lastResult.cozy
+end
+
 local function StartTest(value, cozy)
 	test = { value = value, cozy = cozy }
 	ns.Gauge:SetTarget(value)

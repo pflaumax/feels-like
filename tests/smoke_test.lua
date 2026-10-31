@@ -286,6 +286,11 @@ check("one ticker", #tickers == 1, #tickers)
 -- Dun Morogh before dawn in snow.
 check("dun morogh night snow", math.abs(Gauge.target - (-88)) < 0.01, Gauge.target)
 check("dun morogh word", ns.Model.Band(Gauge.target, Gauge.cozy).word == "Freezing")
+-- Public API.
+check("api version", FeelsLike.API_VERSION == 1, FeelsLike.API_VERSION)
+local apiValue, apiWord, apiCozy = FeelsLike.GetTemperature()
+check("api reading", math.abs(apiValue - (-88)) < 0.01 and apiWord == "Freezing" and apiCozy == false,
+	tostring(apiValue) .. " " .. tostring(apiWord) .. " " .. tostring(apiCozy))
 
 -- The needle moves to the matching SVG.
 local gaugeFrame = _G.FeelsLikeGauge
@@ -514,6 +519,9 @@ end
 check("no dip at the inn door", lowest >= outside - 0.01, lowest)
 check("inn value", math.abs(Gauge.target - 21.8) < 0.01, Gauge.target)
 check("inn cozy", Gauge.cozy == true)
+apiValue, apiWord, apiCozy = FeelsLike.GetTemperature()
+check("api in an inn", math.abs(apiValue - 21.8) < 0.01 and apiWord == "Cozy" and apiCozy == true,
+	tostring(apiValue) .. " " .. tostring(apiWord))
 
 -- A capital city is not an inn.
 world.indoors = false
@@ -1178,11 +1186,14 @@ check("test end is announced", table.concat(printed, "\n"):find("test ended", 1,
 Slash("test 42")
 Tick(1)
 check("test value holds", Gauge.target == 42, Gauge.target)
+local apiDuringTest = FeelsLike.GetTemperature()
 Slash("test cozy")
 check("test cozy", Gauge.cozy == true)
 Slash("test off")
 check("test off returns to reading", Gauge.target ~= 42 and Gauge.cozy == false, Gauge.target)
 local realReading = Gauge.target
+check("api gives the real reading during a test", apiDuringTest ~= 42 and math.abs(apiDuringTest - realReading) < 0.01,
+	tostring(apiDuringTest) .. " vs " .. tostring(realReading))
 Slash("test cozy") -- no test running
 check("test cozy keeps the needle", Gauge.target == realReading and Gauge.cozy == true, Gauge.target)
 Slash("test off")

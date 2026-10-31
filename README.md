@@ -74,6 +74,20 @@ Open Options, then AddOns, then Feels Like. You can
 
 **A zone feels wrong.** Stand there, type `/feels debug` and send me what it prints. Ideas for what should make you colder or warmer are always welcome too.
 
+## For addon authors
+
+Other addons can read the reading:
+
+```lua
+local value, word, cozy = FeelsLike.GetTemperature()
+```
+
+- `value` is the felt temperature from -100 (coldest) to 100 (hottest), the addon's own scale, not degrees.
+- `word` is the word for that reading: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.
+- `cozy` is true by a fire or in an inn.
+
+It always returns the real reading, also while `/feels test` moves the gauge, and nothing before the first reading, right after login. `FeelsLike.API_VERSION` is 1 and goes up only when a change breaks callers.
+
 ## Project folders
 
 ```
