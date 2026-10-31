@@ -131,6 +131,50 @@ check("campfire too hot not cozy", Model.Compute(state({ base = 75, campfire = 1
 check("campfire still cold not cozy", Model.Compute(state({ base = -100, campfire = 1 }), 0).cozy, false)
 check("outdoors not cozy", Model.Compute(state({ base = 0 }), 0).cozy, false)
 
+-- Race
+local dwarf = { cold = 0.75, heat = 1 }
+local undead = { cold = 0.5, heat = 0.6 }
+local tauren = { cold = 0.75, heat = 1.15 }
+local troll = { cold = 1.2, heat = 0.8 }
+check("no body feels like a human", Model.BodyFeel(-60, nil), -60)
+check("neutral body", Model.BodyFeel(-60, { cold = 1, heat = 1 }), -60)
+near("no race without a body", Model.Compute(state({ base = -60 }), 0).race, 0)
+near("dwarf in the snow", Model.Compute(state({ base = -60, body = dwarf }), 0).target, -45)
+near("dwarf race step", Model.Compute(state({ base = -60, body = dwarf }), 0).race, 15)
+near("tauren in the heat", Model.Compute(state({ base = 50, body = tauren }), 0).target, 57.5)
+near("undead scaled before the clamp", Model.Compute(state({ base = 105, body = undead }), 0).target, 63)
+near("undead in lava", Model.Compute(state({ base = -60, burning = 1, body = undead }), 0).target, 100)
+near("wet clothes scaled too", Model.Compute(state({ base = -60, body = dwarf }), 1).target, -60)
+near("human by a fire at night", Model.Compute(state({ base = -68, campfire = 1 }), 0).target, -33)
+check("human by a fire at night is cozy", Model.Compute(state({ base = -68, campfire = 1 }), 0).cozy, true)
+near("troll by a fire at night", Model.Compute(state({ base = -68, campfire = 1, body = troll }), 0).target, -39.6)
+check("troll by a fire at night is not cozy", Model.Compute(state({ base = -68, campfire = 1, body = troll }), 0).cozy, false)
+for name, body in pairs({ dwarf = dwarf, undead = undead, tauren = tauren, troll = troll }) do
+	near("mild stays mild for " .. name, Model.Compute(state({ base = 0, body = body }), 0).target, 0)
+end
+-- A fire warms every body only up to Warm.
+near("tauren by a fire on a mild day", Model.Compute(state({ base = 15, campfire = 1, body = tauren }), 0).target, 45)
+check("tauren by a fire on a mild day is cozy", Model.Compute(state({ base = 15, campfire = 1, body = tauren }), 0).cozy, true)
+near("tauren with a torch on a warm day", Model.Compute(state({ base = 30, torch = true, body = tauren }), 0).target, 45)
+near("tauren by a fire and a torch", Model.Compute(state({ base = 0, campfire = 1, torch = true, body = tauren }), 0).target, 45)
+-- A fire never cools a body that is hotter without it.
+near("hot tauren by a fire", Model.Compute(state({ base = 50, campfire = 1, body = tauren }), 0).target, 57.5)
+near("warm tauren by a fire", Model.Compute(state({ base = 42, campfire = 1, body = tauren }), 0).target, 48.3)
+near("warm tauren without a fire", Model.Compute(state({ base = 42, body = tauren }), 0).target, 48.3)
+near("damp warm tauren by a fire", Model.Compute(state({ base = 44, campfire = 1, body = tauren }), 0.01).target,
+	Model.Compute(state({ base = 44, body = tauren }), 0.01).target)
+-- Below the ceiling the fire row stays as before.
+near("dwarf by a fire at night", Model.Compute(state({ base = -68, campfire = 1, body = dwarf }), 0).target, -24.75)
+-- Every Forever race is in the table, and every entry has both factors.
+assert(loadfile("FeelsLike/Data/Races.lua"))("FeelsLike", ns)
+for _, race in ipairs({ "Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll", "Skyborne" }) do
+	check("race in table: " .. race, ns.Races[race] ~= nil, true)
+end
+for race, body in pairs(ns.Races) do
+	check("race factors: " .. race, type(body.cold) == "number" and body.cold > 0
+		and type(body.heat) == "number" and body.heat > 0, true)
+end
+
 -- Campfire nearness
 check("fresh aura", Model.CampfireNearness(0), 1)
 check("renewed recently", Model.CampfireNearness(4), 1)

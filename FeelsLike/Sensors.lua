@@ -494,6 +494,14 @@ function Sensors.Read()
 		CampfireNearness()
 	state.swimming = IsSwimming()
 	state.torch = TorchLight()
+	-- The English race name is the same in every language. The local one is for /feels debug.
+	local raceName, race = UnitRace("player")
+	if IsSecret(race) then
+		race = nil
+	end
+	state.race = race
+	state.raceName = not IsSecret(raceName) and raceName or nil
+	state.body = race and ns.Races[race]
 	state.burning = ns.Model.Burning(lastFireHit and GetTime() - lastFireHit, state.swimming)
 	return state
 end

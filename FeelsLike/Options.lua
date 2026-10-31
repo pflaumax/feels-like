@@ -47,6 +47,11 @@ function Options:Register(db)
 	Settings.CreateDropdown(category, label, LabelOptions,
 		"One word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.")
 
+	local race = Settings.RegisterAddOnSetting(category, "FEELSLIKE_RACE", "race", db,
+		Settings.VarType.Boolean, "Feel by race", defaults.race)
+	Settings.CreateCheckbox(category, race,
+		"Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either.")
+
 	local locked = Settings.RegisterAddOnSetting(category, "FEELSLIKE_LOCKED", "locked", db,
 		Settings.VarType.Boolean, "Lock position", defaults.locked)
 	locked:SetValueChangedCallback(function(_, value)

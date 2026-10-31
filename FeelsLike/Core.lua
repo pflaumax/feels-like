@@ -6,6 +6,7 @@ ns.DEFAULTS = {
 	unit = "C",
 	label = "hover",
 	locked = false,
+	race = true,
 	-- Default gauge size for Forever and Retail.
 	scale = ns.Sensors.isForever and 0.53 or 0.45,
 }
@@ -71,6 +72,11 @@ local function Update()
 	lastUpdate = now
 
 	local state = ns.Sensors.Read()
+	-- The race setting can turn the body off.
+	state.raceOff = not FeelsLikeDB.race
+	if state.raceOff then
+		state.body = nil
+	end
 	local result = ns.Model.Compute(state, wetness)
 	lastState, lastResult = state, result
 	if not test then
@@ -170,6 +176,18 @@ local function PrintDebug()
 	print(string.format("  campfire %.2f%s: %s", s.campfire, campfireDetails, Signed(r.campfire)))
 	print(string.format("  torch %s: %s", s.torch or "none", Signed(r.torch)))
 	print(string.format("  swimming %s, wetness %.2f: %s", s.swimming and "yes" or "no", wetness, Signed(r.wet)))
+	local race = s.race or "unknown"
+	if s.race and s.raceName and s.raceName ~= s.race then
+		race = string.format("%s (%s)", race, s.raceName)
+	end
+	if s.raceOff then
+		race = race .. ", off in settings"
+	elseif s.body then
+		race = string.format("%s, cold x%.2f, heat x%.2f", race, s.body.cold, s.body.heat)
+	elseif s.race then
+		race = race .. ", not in the table, feels like a human"
+	end
+	print(string.format("  race %s: %s", race, Signed(r.race)))
 	print(string.format("  fire underfoot %.2f: %s", s.burning, Signed(r.burn)))
 	print(string.format("  felt %s, target %s: %s%s", Signed(r.felt), Signed(r.target), band.word,
 		test and " (test active, /feels test off)" or ""))

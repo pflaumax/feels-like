@@ -68,6 +68,7 @@ local function ResetWorld()
 		time = 1000, combat = false,
 		pos = { x = 0, y = 0, map = 0 }, speed = 0,
 		hands = {}, -- item IDs by slot
+		raceName = "Human", race = "Human", raceID = 1,
 	}
 end
 ResetWorld()
@@ -106,6 +107,7 @@ local function InstallGlobals(forever)
 	_G.UnitPosition = function() return world.pos.y, world.pos.x, 0, world.pos.map end
 	_G.GetUnitSpeed = function() return world.speed end
 	_G.GetInventoryItemID = function(_, slot) return world.hands[slot] end
+	_G.UnitRace = function() return world.raceName, world.race, world.raceID end
 	_G.IsShiftKeyDown = function() return world.shift end
 	_G.SlashCmdList = {}
 
@@ -276,7 +278,9 @@ for _, layer in ipairs(vectorLayers) do
 		file:close()
 	end
 end
-check("defaults saved", FeelsLikeDB.unit == "C" and FeelsLikeDB.label == "hover" and FeelsLikeDB.locked == false and FeelsLikeDB.scale == 0.53)
+check("defaults saved", FeelsLikeDB.unit == "C" and FeelsLikeDB.label == "hover" and FeelsLikeDB.locked == false and FeelsLikeDB.scale == 0.53
+	and FeelsLikeDB.race == true)
+check("race setting registered", settings.FEELSLIKE_RACE ~= nil)
 check("one ticker", #tickers == 1, #tickers)
 
 -- Dun Morogh before dawn in snow.
@@ -1233,6 +1237,61 @@ ns = LoadAddon(true, { scale = 0.45, version = 2 })
 check("0.45 chosen after the move stays", FeelsLikeDB.scale == 0.45, FeelsLikeDB.scale)
 ns = LoadAddon(false, { scale = 0.45 })
 check("retail keeps 0.45", FeelsLikeDB.scale == 0.45, FeelsLikeDB.scale)
+check("old save gets the race setting", FeelsLikeDB.race == true, FeelsLikeDB.race)
+
+-- Race, in Dun Morogh before dawn in snow (-88 for a human).
+ns = LoadAddon(true)
+-- English name, and the local one when it differs.
+local function RaceTarget(race, name)
+	world.race, world.raceName = race, name or race
+	Tick(1)
+	return ns.Gauge.target
+end
+check("human race", math.abs(RaceTarget("Human") - (-88)) < 0.01, ns.Gauge.target)
+debugText = Slash("debug")
+check("debug shows a neutral race", debugText:find("race Human, cold x1.00, heat x1.00: +0.0", 1, true), debugText)
+check("dwarf feels less cold", math.abs(RaceTarget("Dwarf") - (-66)) < 0.01, ns.Gauge.target)
+debugText = Slash("debug")
+check("debug shows the race", debugText:find("race Dwarf, cold x0.75, heat x1.00: +22.0", 1, true), debugText)
+check("undead still cold", math.abs(RaceTarget("Scourge", "Undead") - (-44)) < 0.01
+	and ns.Model.Band(ns.Gauge.target).word == "Cold", ns.Gauge.target)
+debugText = Slash("debug")
+check("debug adds the local name", debugText:find("race Scourge (Undead), cold x0.50, heat x0.60: +44.0", 1, true), debugText)
+RaceTarget("Dwarf", "Nain")
+check("debug adds a translated name", Slash("debug"):find("race Dwarf (Nain), cold x0.75", 1, true))
+check("troll clamped at the bottom", RaceTarget("Troll") == -100, ns.Gauge.target)
+-- Turned off in the settings.
+FeelsLikeDB.race = false
+check("race off feels like a human", math.abs(RaceTarget("Dwarf") - (-88)) < 0.01, ns.Gauge.target)
+debugText = Slash("debug")
+check("debug says race off", debugText:find("race Dwarf, off in settings: +0.0", 1, true), debugText)
+FeelsLikeDB.race = true
+check("race back on", math.abs(RaceTarget("Dwarf") - (-66)) < 0.01, ns.Gauge.target)
+-- A race not in the table.
+check("unknown race feels like a human", math.abs(RaceTarget("Goblin") - (-88)) < 0.01, ns.Gauge.target)
+debugText = Slash("debug")
+check("debug says not in the table", debugText:find("race Goblin, not in the table, feels like a human: +0.0", 1, true), debugText)
+-- A secret race.
+local raceIsSecret = _G.issecretvalue
+_G.issecretvalue = function(value) return value == "Dwarf" or value == "Nain" end
+check("secret race feels like a human", math.abs(RaceTarget("Dwarf", "Nain") - (-88)) < 0.01, ns.Gauge.target)
+debugText = Slash("debug")
+check("debug says race unknown", debugText:find("race unknown: +0.0", 1, true), debugText)
+check("debug hides a secret local name", not debugText:find("Nain", 1, true), debugText)
+-- Secret and turned off.
+FeelsLikeDB.race = false
+Tick(1)
+check("debug says off for an unknown race", Slash("debug"):find("race unknown, off in settings: +0.0", 1, true))
+FeelsLikeDB.race = true
+_G.issecretvalue = raceIsSecret
+-- No race at all, as in a very early load.
+check("no race feels like a human", math.abs(RaceTarget(nil, false) - (-88)) < 0.01, ns.Gauge.target)
+check("debug says race unknown without a race", Slash("debug"):find("race unknown: +0.0", 1, true))
+-- Retail reads the race too.
+ns = LoadAddon(false)
+world.mapID, world.zoneText, world.hour = 27, "Dun Morogh", 5
+check("retail dwarf", math.abs(RaceTarget("Dwarf") - (-51)) < 0.01, ns.Gauge.target)
+world.race, world.raceName = "Human", "Human"
 
 -- Line dial when SVG fails
 

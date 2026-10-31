@@ -24,6 +24,8 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 **Water.** A swim chills you. It's cold in a mild zone, freezing in the snow and just refreshing in a desert. Your clothes dry over time, and faster when it's warm.
 
+**Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
+
 ## Reading the gauge
 
 Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see one word next to it, like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.
@@ -36,6 +38,7 @@ Open Options, then AddOns, then Feels Like. You can
 
 - switch between Celsius and Fahrenheit
 - show the word on hover, always or never
+- choose whether your race changes how you feel
 - lock the gauge in place
 - change its size
 - put it back by the minimap
@@ -66,6 +69,8 @@ Open Options, then AddOns, then Feels Like. You can
 **Does it need other addons?** No. It also works with ClassicUI Forever.
 
 **Which versions of the game?** It's made for WoW Forever. It also loads on Retail, but there only a few old zones have a climate, so most places read as Mild.
+
+**My undead should feel the cold.** Turn off Feel by race in the settings, and your character feels the weather like a human.
 
 **A zone feels wrong.** Stand there, type `/feels debug` and send me what it prints. Ideas for what should make you colder or warmer are always welcome too.
 

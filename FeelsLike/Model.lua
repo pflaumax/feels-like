@@ -244,6 +244,14 @@ function Model.DayNight(hour, climate)
 	return -swing.night * depth
 end
 
+-- Scales the distance from Mild by the body's cold or heat factor. No body is like a human.
+function Model.BodyFeel(t, body)
+	if not body then
+		return t
+	end
+	return t * (t < 0 and body.cold or body.heat)
+end
+
 -- Felt temperature from the game state and wetness. Returns every step for /feels debug.
 function Model.Compute(state, wetness)
 	local r = {}
@@ -272,8 +280,17 @@ function Model.Compute(state, wetness)
 	r.torch = torch and math.min(TORCH_WARMTH, room - r.campfire) or 0
 	r.dry = r.sheltered + r.campfire + r.torch
 	r.wet = -WET_CHILL * wetness * math.max(0, r.dry - Model.MIN)
+	-- The body feels the cold and the heat by race. Fire underfoot burns everyone alike.
+	local unscaled = r.dry + r.wet
+	local scaled = Model.BodyFeel(unscaled, state.body)
+	-- A fire warms no body past the ceiling, and it never cools a body that is hotter without it.
+	if r.campfire + r.torch > 0 then
+		local withoutFire = r.sheltered - WET_CHILL * wetness * math.max(0, r.sheltered - Model.MIN)
+		scaled = math.min(scaled, math.max(FIRE_CEILING, Model.BodyFeel(withoutFire, state.body)))
+	end
+	r.race = scaled - unscaled
 	-- Fire underfoot pulls the reading toward hot.
-	local beforeBurn = r.dry + r.wet
+	local beforeBurn = unscaled + r.race
 	r.burn = math.max(0, (Model.MAX - beforeBurn) * (state.burning or 0))
 	r.felt = beforeBurn + r.burn
 	r.target = Model.Clamp(r.felt)
