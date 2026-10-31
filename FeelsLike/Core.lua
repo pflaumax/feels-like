@@ -63,6 +63,17 @@ local function InitDB()
 	return FeelsLikeDB
 end
 
+-- The body that feels the weather: none with the race setting off, then fur or the race.
+local function ChooseBody(state)
+	state.raceOff = not FeelsLikeDB.race
+	if state.raceOff then
+		return nil
+	elseif state.form and ns.FurForms[state.form] then
+		return ns.Fur
+	end
+	return state.race and ns.Races[state.race]
+end
+
 local function Update()
 	-- Update how wet the clothes are since the last update.
 	local now = GetTime()
@@ -72,11 +83,7 @@ local function Update()
 	lastUpdate = now
 
 	local state = ns.Sensors.Read()
-	-- The race setting can turn the body off.
-	state.raceOff = not FeelsLikeDB.race
-	if state.raceOff then
-		state.body = nil
-	end
+	state.body = ChooseBody(state)
 	local result = ns.Model.Compute(state, wetness)
 	lastState, lastResult = state, result
 	if not test then
@@ -191,6 +198,10 @@ local function PrintDebug()
 	local race = s.race or "unknown"
 	if s.race and s.raceName and s.raceName ~= s.race then
 		race = string.format("%s (%s)", race, s.raceName)
+	end
+	if s.form then
+		local fur = ns.FurForms[s.form]
+		race = race .. (fur and string.format(", in %s (fur)", fur) or string.format(", in form %d", s.form))
 	end
 	if s.raceOff then
 		race = race .. ", off in settings"
@@ -341,8 +352,10 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 		events:RegisterEvent(event)
 	end
 	-- Only register events the client knows.
-	if C_EventUtils and C_EventUtils.IsEventValid("WEATHER_CHANGED") then
-		events:RegisterEvent("WEATHER_CHANGED")
+	for _, event in ipairs({ "WEATHER_CHANGED", "UPDATE_SHAPESHIFT_FORM" }) do
+		if C_EventUtils and C_EventUtils.IsEventValid(event) then
+			events:RegisterEvent(event)
+		end
 	end
 	-- Fire damage, end of combat and campfire aura updates.
 	events:RegisterUnitEvent("UNIT_COMBAT", "player")
@@ -367,6 +380,11 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 		elseif event == "PLAYER_REGEN_ENABLED" then
 			ns.Sensors.OnCombatEnded()
 			return
+		elseif event == "UPDATE_SHAPESHIFT_FORM" then
+			-- Fires often, also without a new form.
+			if lastState and ns.Sensors.ReadForm() == lastState.form then
+				return
+			end
 		elseif event == "PLAYER_ENTERING_WORLD" then
 			local isInitialLogin, isReloadingUi = ...
 			ns.Sensors.OnLoadingScreen(not (isInitialLogin or isReloadingUi))

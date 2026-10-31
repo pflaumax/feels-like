@@ -108,6 +108,7 @@ local function InstallGlobals(forever)
 	_G.GetUnitSpeed = function() return world.speed end
 	_G.GetInventoryItemID = function(_, slot) return world.hands[slot] end
 	_G.UnitRace = function() return world.raceName, world.race, world.raceID end
+	_G.GetShapeshiftFormID = function() return world.form end
 	_G.IsShiftKeyDown = function() return world.shift end
 	_G.SlashCmdList = {}
 
@@ -1320,6 +1321,56 @@ _G.issecretvalue = raceIsSecret
 -- No race at all, as in a very early load.
 check("no race feels like a human", math.abs(RaceTarget(nil, false) - (-88)) < 0.01, ns.Gauge.target)
 check("debug says race unknown without a race", Slash("debug"):find("race unknown: +0.0", 1, true))
+-- Druid forms with fur.
+local function FormTarget(form, race)
+	world.form = form
+	if race then
+		return RaceTarget(race)
+	end
+	return RaceTarget("NightElf", "Night Elf")
+end
+check("cat form has fur", math.abs(FormTarget(1) - (-66)) < 0.01, ns.Gauge.target)
+debugText = Slash("debug")
+check("debug shows the fur form", debugText:find("race NightElf (Night Elf), in Cat Form (fur), cold x0.75, heat x1.15: +22.0", 1, true), debugText)
+for _, form in ipairs({ 3, 5, 8, 31 }) do
+	check("fur form " .. form, math.abs(FormTarget(form) - (-66)) < 0.01, ns.Gauge.target)
+end
+check("a tauren bear feels like a tauren", math.abs(FormTarget(5, "Tauren") - (-66)) < 0.01, ns.Gauge.target)
+check("ghost wolf has no fur", math.abs(FormTarget(16, "Orc") - (-88)) < 0.01, ns.Gauge.target)
+check("debug names a form without fur", Slash("debug"):find("race Orc, in form 16, cold x1.00, heat x1.00: +0.0", 1, true))
+FormTarget(0)
+check("form 0 is no form", not Slash("debug"):find("race NightElf (Night Elf), in", 1, true))
+FeelsLikeDB.race = false
+check("fur off with the race setting", math.abs(FormTarget(1) - (-88)) < 0.01, ns.Gauge.target)
+check("debug says off in a form", Slash("debug"):find("in Cat Form (fur), off in settings: +0.0", 1, true))
+FeelsLikeDB.race = true
+local formIsSecret, secretForm = _G.issecretvalue, {}
+_G.issecretvalue = function(value) return value == secretForm end
+check("secret form has no fur", math.abs(FormTarget(secretForm) - (-88)) < 0.01, ns.Gauge.target)
+_G.issecretvalue = formIsSecret
+local realFormID = _G.GetShapeshiftFormID
+_G.GetShapeshiftFormID = nil
+check("no form API, no fur", math.abs(FormTarget(1) - (-88)) < 0.01, ns.Gauge.target)
+_G.GetShapeshiftFormID = realFormID
+-- Shifting updates at once.
+FormTarget(nil)
+local formEventRegistered = false
+for _, frame in ipairs(createdFrames) do
+	formEventRegistered = formEventRegistered or frame.events.UPDATE_SHAPESHIFT_FORM == true
+end
+check("form event registered", formEventRegistered)
+local reads, realRead = 0, ns.Sensors.Read
+ns.Sensors.Read = function()
+	reads = reads + 1
+	return realRead()
+end
+CoreEvent("UPDATE_SHAPESHIFT_FORM")
+check("form event without a new form reads nothing", reads == 0, reads)
+world.form = 5
+CoreEvent("UPDATE_SHAPESHIFT_FORM")
+check("form event updates at once", reads == 1 and math.abs(ns.Gauge.target - (-66)) < 0.01, ns.Gauge.target)
+ns.Sensors.Read = realRead
+world.form = nil
 -- Retail reads the race too.
 ns = LoadAddon(false)
 world.mapID, world.zoneText, world.hour = 27, "Dun Morogh", 5

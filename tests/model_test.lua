@@ -191,9 +191,16 @@ assert(loadfile("FeelsLike/Data/Races.lua"))("FeelsLike", ns)
 for _, race in ipairs({ "Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll", "Skyborne" }) do
 	check("race in table: " .. race, ns.Races[race] ~= nil, true)
 end
-for race, body in pairs(ns.Races) do
-	check("race factors: " .. race, type(body.cold) == "number" and body.cold > 0
+local bodies = { Fur = ns.Fur }
+for name, body in pairs(ns.Races) do
+	bodies[name] = body
+end
+for name, body in pairs(bodies) do
+	check("body factors: " .. name, type(body.cold) == "number" and body.cold > 0
 		and type(body.heat) == "number" and body.heat > 0, true)
+end
+for id, name in pairs(ns.FurForms) do
+	check("fur form " .. id, type(id) == "number" and type(name) == "string", true)
 end
 
 -- Campfire nearness

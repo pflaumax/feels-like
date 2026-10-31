@@ -24,7 +24,7 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 **Water.** A swim chills you. It's cold in a mild zone, freezing in the snow and just refreshing in a desert. Your clothes dry over time, and faster when it's warm.
 
-**Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
+**Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either. Druids in cat, bear, travel or moonkin form have fur, like tauren. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
 
 ## Reading the gauge
 

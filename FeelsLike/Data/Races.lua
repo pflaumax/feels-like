@@ -17,3 +17,13 @@ ns.Races = {
 	Troll = Body(1.2, 0.8),
 	Skyborne = Body(1, 1), -- both factions
 }
+
+-- Forms with fur feel like a tauren. Keys are GetShapeshiftFormID's IDs.
+ns.Fur = Body(0.75, 1.15)
+ns.FurForms = {
+	[1] = "Cat Form",
+	[3] = "Travel Form",
+	[5] = "Bear Form",
+	[8] = "Dire Bear Form",
+	[31] = "Moonkin Form", -- feathers over fur
+}

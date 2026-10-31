@@ -464,6 +464,15 @@ function Sensors.OnLoadingScreen(moved)
 	campfireLoadedAt = GetTime()
 end
 
+-- Shapeshift form ID, or nil in normal form.
+function Sensors.ReadForm()
+	local form = GetShapeshiftFormID and GetShapeshiftFormID()
+	if IsSecret(form) or form == 0 then
+		return nil
+	end
+	return form
+end
+
 function Sensors.Read()
 	local state = {}
 	ReadPlace(state)
@@ -501,7 +510,7 @@ function Sensors.Read()
 	end
 	state.race = race
 	state.raceName = not IsSecret(raceName) and raceName or nil
-	state.body = race and ns.Races[race]
+	state.form = Sensors.ReadForm()
 	state.burning = ns.Model.Burning(lastFireHit and GetTime() - lastFireHit, state.swimming)
 	return state
 end

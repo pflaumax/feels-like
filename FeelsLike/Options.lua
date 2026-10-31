@@ -50,7 +50,7 @@ function Options:Register(db)
 	local race = Settings.RegisterAddOnSetting(category, "FEELSLIKE_RACE", "race", db,
 		Settings.VarType.Boolean, "Feel by race", defaults.race)
 	Settings.CreateCheckbox(category, race,
-		"Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either.")
+		"Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either. Druids in cat, bear, travel or moonkin form have fur, like tauren.")
 
 	local locked = Settings.RegisterAddOnSetting(category, "FEELSLIKE_LOCKED", "locked", db,
 		Settings.VarType.Boolean, "Lock position", defaults.locked)
