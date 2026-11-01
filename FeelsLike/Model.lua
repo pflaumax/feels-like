@@ -160,6 +160,9 @@ local RAIN_SOAK_TIME = 60 -- seconds of rain from dry to soaked
 local BURN_HOLD = 2.5 -- seconds at full heat after the last hit
 local BURN_FADE = 4 -- seconds to fade back to normal
 
+-- A drink warms a cold body: tipsy, drunk, completely smashed.
+local DRINK_WARMTH = { 10, 20, 30 }
+
 -- The fire renews Cozy Fire while you stand near. An old aura means you walked away.
 local CAMPFIRE_HOLD = 4 -- seconds since renewal that still count as near
 local CAMPFIRE_RENEWAL_SLACK = 1.5 -- extra hold on top of the measured gap
@@ -307,8 +310,10 @@ function Model.Compute(state, wetness)
 		scaled = math.min(scaled, math.max(FIRE_CEILING, Model.BodyFeel(withoutFire, state.body)))
 	end
 	r.race = scaled - unscaled
+	-- A drink warms only a cold body, and never past the middle of Mild.
+	r.drink = math.min(DRINK_WARMTH[state.drunk] or 0, math.max(0, -scaled))
 	-- Fire underfoot pulls the reading toward hot.
-	local beforeBurn = unscaled + r.race
+	local beforeBurn = scaled + r.drink
 	r.burn = math.max(0, (Model.MAX - beforeBurn) * (state.burning or 0))
 	r.felt = beforeBurn + r.burn
 	r.target = Model.Clamp(r.felt)

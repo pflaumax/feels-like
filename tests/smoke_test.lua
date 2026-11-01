@@ -97,6 +97,15 @@ local function InstallGlobals(forever)
 
 	_G.DEFAULT_CHAT_FRAME = { AddMessage = function(_, text, r, g, b) chatLines[#chatLines + 1] = { text = text, r = r, g = g, b = b } end }
 	_G.ChatTypeInfo = { EMOTE = { r = 1, g = 0.5, b = 0.25 } }
+	-- Forever's GlobalStrings, build 1.60.1.70707.
+	_G.DRUNK_MESSAGE_SELF1 = "You feel sober again."
+	_G.DRUNK_MESSAGE_SELF2 = "You feel tipsy. Whee!"
+	_G.DRUNK_MESSAGE_SELF3 = "You feel drunk.  Woah!"
+	_G.DRUNK_MESSAGE_SELF4 = "You feel completely smashed."
+	_G.DRUNK_MESSAGE_ITEM_SELF1 = "You feel sober after the %s."
+	_G.DRUNK_MESSAGE_ITEM_SELF2 = "You feel a little tipsy from the %s."
+	_G.DRUNK_MESSAGE_ITEM_SELF3 = "You're feeling drunk off of %s."
+	_G.DRUNK_MESSAGE_ITEM_SELF4 = "You feel completely smashed after that %s."
 	_G.UIParent = Widget()
 	_G.GameTooltip = Widget()
 	_G.GameTooltip.IsOwned = function() return false end
@@ -1574,6 +1583,99 @@ ns = LoadAddon(false)
 world.mapID, world.zoneText, world.hour = 27, "Dun Morogh", 5
 check("retail dwarf", math.abs(RaceTarget("Dwarf") - (-51)) < 0.01, ns.Gauge.target)
 world.race, world.raceName = "Human", "Human"
+
+-- A drink warms you, in Dun Morogh before dawn in snow (-88).
+ns = LoadAddon(true)
+Tick(1)
+local function Say(text)
+	CoreEvent("CHAT_MSG_SYSTEM", text, "", "", "", "", "", 0, 0, "", 0, 1)
+	return ns.Gauge.target
+end
+local function Near(value, expected)
+	return math.abs(value - expected) < 0.01
+end
+local drinkEventRegistered = false
+for _, frame in ipairs(createdFrames) do
+	drinkEventRegistered = drinkEventRegistered or frame.events.CHAT_MSG_SYSTEM == true
+end
+check("system lines registered", drinkEventRegistered)
+check("sober at first", Near(ns.Gauge.target, -88) and Slash("debug"):find("drink sober: +0.0", 1, true), ns.Gauge.target)
+check("tipsy", Near(Say("You feel tipsy. Whee!"), -78), ns.Gauge.target)
+debugText = Slash("debug")
+check("debug shows the drink", debugText:find("drink tipsy (0 min): +10.0", 1, true), debugText)
+check("drunk", Near(Say("You feel drunk.  Woah!"), -68), ns.Gauge.target)
+check("completely smashed", Near(Say("You feel completely smashed."), -58), ns.Gauge.target)
+check("sober again", Near(Say("You feel sober again."), -88), ns.Gauge.target)
+check("sober clears the save", FeelsLikeDB.drink == nil)
+check("tipsy from a drink", Near(Say("You feel a little tipsy from the Rhapsody Malt."), -78), ns.Gauge.target)
+check("drunk from a drink", Near(Say("You're feeling drunk off of Thunder Ale."), -68), ns.Gauge.target)
+check("smashed from a drink", Near(Say("You feel completely smashed after that Dwarven Mild."), -58), ns.Gauge.target)
+check("sober after a drink", Near(Say("You feel sober after the Morning Coffee."), -88), ns.Gauge.target)
+check("a drink's link", Near(Say("You feel a little tipsy from the |cffffffff|Hitem:2894::::::::|h[Rhapsody Malt]|h|r."), -78), ns.Gauge.target)
+check("a drink's name with pattern characters", Near(Say("You're feeling drunk off of 100% (Proof) Rum."), -68), ns.Gauge.target)
+-- Other lines change nothing.
+check("another system line", Near(Say("You are now Away: AFK"), -68), ns.Gauge.target)
+check("someone else is tipsy", Near(Say("Bob looks tipsy."), -68), ns.Gauge.target)
+check("someone else is tipsy from a drink", Near(Say("Bob seems a little tipsy from the Rhapsody Malt."), -68), ns.Gauge.target)
+check("half a line", Near(Say("You feel tipsy."), -68), ns.Gauge.target)
+check("a line that only looks like one", Near(Say("You feel sober after the Morning Coffee!"), -68), ns.Gauge.target)
+check("a line around a drunk line", Near(Say("Bob: You feel sober after the Morning Coffee. Really."), -68), ns.Gauge.target)
+check("no text", Near(Say(nil), -68), ns.Gauge.target)
+local drinkIsSecret = _G.issecretvalue
+_G.issecretvalue = function(value) return value == "You feel sober again." end
+check("a secret line keeps the drink", Near(Say("You feel sober again."), -68), ns.Gauge.target)
+_G.issecretvalue = drinkIsSecret
+-- The heat stays the same.
+world.mapID, world.zoneText, world.hour = 1446, "Tanaris", 15
+world.weather = { type = 0, intensity = 0 }
+Tick(1)
+local tanarisDrunk = ns.Gauge.target
+Say("You feel sober again.")
+check("a drink does not heat the desert", Near(ns.Gauge.target, tanarisDrunk), ns.Gauge.target)
+world.mapID, world.zoneText, world.hour = 1426, "Dun Morogh", 5
+world.weather = { type = 2, intensity = 1 }
+Tick(1)
+-- Two hours without a drunk line count as sober.
+Say("You feel tipsy. Whee!")
+Tick(120)
+check("debug counts the minutes", Slash("debug"):find("drink tipsy (2 min): +10.0", 1, true))
+Tick(2 * 60 * 60 - 120)
+check("tipsy for two hours", Near(ns.Gauge.target, -78), ns.Gauge.target)
+Tick(1)
+check("sober after two hours", Near(ns.Gauge.target, -88), ns.Gauge.target)
+-- A /reload keeps the drink, a login does not.
+Say("You feel drunk.  Woah!")
+local beforeReload = world.time
+ns = LoadAddon(true, FeelsLikeDB)
+world.time = beforeReload + 5
+Tick(1)
+check("sober until the game says it was a reload", Near(ns.Gauge.target, -88), ns.Gauge.target)
+CoreEvent("PLAYER_ENTERING_WORLD", false, true)
+check("a reload keeps the drink", Near(ns.Gauge.target, -68), ns.Gauge.target)
+CoreEvent("PLAYER_ENTERING_WORLD", false, false)
+check("a loading screen keeps the drink", Near(ns.Gauge.target, -68), ns.Gauge.target)
+beforeReload = world.time
+ns = LoadAddon(true, FeelsLikeDB)
+world.time = beforeReload + 5
+CoreEvent("PLAYER_ENTERING_WORLD", true, false)
+check("a login starts sober", Near(ns.Gauge.target, -88) and FeelsLikeDB.drink == nil, ns.Gauge.target)
+CoreEvent("PLAYER_ENTERING_WORLD", false, false)
+check("a loading screen after the login stays sober", Near(ns.Gauge.target, -88), ns.Gauge.target)
+-- A line between the load and the reload's PLAYER_ENTERING_WORLD wins.
+Say("You feel completely smashed.")
+beforeReload = world.time
+ns = LoadAddon(true, FeelsLikeDB)
+world.time = beforeReload + 5
+Say("You feel sober again.")
+CoreEvent("PLAYER_ENTERING_WORLD", false, true)
+check("a new line wins over the saved drink", Near(ns.Gauge.target, -88) and FeelsLikeDB.drink == nil, ns.Gauge.target)
+-- A client without one of the lines. They are read at the first system line.
+ns = LoadAddon(true)
+_G.DRUNK_MESSAGE_ITEM_SELF2 = nil
+Tick(1)
+check("a missing line is skipped", Near(Say("You feel a little tipsy from the Rhapsody Malt."), -88), ns.Gauge.target)
+check("the other lines still work", Near(Say("You feel tipsy. Whee!"), -78), ns.Gauge.target)
+Say("You feel sober again.")
 
 -- Line dial when SVG fails
 

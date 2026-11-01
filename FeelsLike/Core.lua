@@ -34,7 +34,14 @@ local TEST_TIMEOUT = 30
 
 local MAX_AURAS = 255
 
+-- No drunk line for this long counts as sober, in case the game's line was missed. Long, because more
+-- drinks at the same level bring no new line.
+local DRINK_FORGET = 2 * 60 * 60
+local DRUNK_NAMES = { "tipsy", "drunk", "completely smashed" }
+
 local wetness = 0
+-- The saved drink, until the game says whether this load is a /reload.
+local drinkBeforeReload
 local lastState, lastResult
 local lastUpdate
 -- While a test runs, real readings do not move the gauge.
@@ -62,7 +69,18 @@ local function InitDB()
 			FeelsLikeDB[key] = value
 		end
 	end
+	-- A login starts sober. A /reload gets the drink back at PLAYER_ENTERING_WORLD.
+	drinkBeforeReload, FeelsLikeDB.drink = FeelsLikeDB.drink, nil
 	return FeelsLikeDB
+end
+
+-- How drunk you are, from 0 sober to 3 completely smashed.
+local function Drunk(now)
+	local drink = FeelsLikeDB.drink
+	if not drink or now - drink.at > DRINK_FORGET then
+		return 0
+	end
+	return drink.level
 end
 
 -- The body that feels the weather: none with the race setting off, then fur, the undead choice or the race.
@@ -90,6 +108,7 @@ local function Update()
 
 	local state = ns.Sensors.Read()
 	state.body = ChooseBody(state)
+	state.drunk = Drunk(now)
 	local result = ns.Model.Compute(state, wetness)
 	lastState, lastResult = state, result
 	if not test then
@@ -240,6 +259,11 @@ local function PrintDebug()
 		race = race .. ", not in the table, feels like a human"
 	end
 	print(string.format("  race %s: %s", race, Signed(r.race)))
+	local drink = "sober"
+	if s.drunk > 0 and FeelsLikeDB.drink then
+		drink = string.format("%s (%d min)", DRUNK_NAMES[s.drunk], math.floor((GetTime() - FeelsLikeDB.drink.at) / 60))
+	end
+	print(string.format("  drink %s: %s", drink, Signed(r.drink)))
 	print(string.format("  fire underfoot %.2f: %s", s.burning, Signed(r.burn)))
 	print("  resistance, not counted yet: " .. DescribeResistances(ns.Sensors.ReadResistances()))
 	if s.dead then
@@ -391,6 +415,8 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 			events:RegisterEvent(event)
 		end
 	end
+	-- The game's drunk lines come as system lines.
+	events:RegisterEvent("CHAT_MSG_SYSTEM")
 	-- Fire damage, end of combat and campfire aura updates.
 	events:RegisterUnitEvent("UNIT_COMBAT", "player")
 	events:RegisterUnitEvent("UNIT_AURA", "player")
@@ -407,6 +433,13 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 				end)
 			end
 			return
+		elseif event == "CHAT_MSG_SYSTEM" then
+			local level = ns.Sensors.DrunkLevel((...))
+			if not level then
+				return
+			end
+			FeelsLikeDB.drink = level > 0 and { level = level, at = GetTime() } or nil
+			drinkBeforeReload = nil -- the new line wins
 		elseif event == "UNIT_AURA" then
 			local _, updateInfo = ...
 			ns.Sensors.OnUnitAura(updateInfo)
@@ -425,6 +458,10 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 			if isInitialLogin or isReloadingUi then
 				ns.Flavor.OnLogin(GetTime())
 			end
+			if isReloadingUi and drinkBeforeReload then
+				FeelsLikeDB.drink = drinkBeforeReload
+			end
+			drinkBeforeReload = nil
 		end
 		Update()
 	end)

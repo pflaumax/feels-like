@@ -454,6 +454,42 @@ function Sensors.AcceptFireHit()
 	return true
 end
 
+-- The game's lines when you get drunk or sober, sober first. Its own translations, so every language works.
+local drunkLines
+
+-- Turns a line with a drink's name into a pattern that takes any name.
+local function DrinkPattern(format)
+	local pattern = format:gsub("%%%d?%$?s", "\1"):gsub("[%^%$%(%)%%%.%[%]%*%+%-%?]", "%%%0"):gsub("\1", ".+")
+	return "^" .. pattern .. "$"
+end
+
+local function DrunkLines()
+	if not drunkLines then
+		drunkLines = {}
+		for level = 1, 4 do
+			local plain, withDrink = _G["DRUNK_MESSAGE_SELF" .. level], _G["DRUNK_MESSAGE_ITEM_SELF" .. level]
+			drunkLines[level] = {
+				plain = type(plain) == "string" and plain or nil,
+				pattern = type(withDrink) == "string" and DrinkPattern(withDrink) or nil,
+			}
+		end
+	end
+	return drunkLines
+end
+
+-- How drunk a system line in chat says you are: 0 sober to 3 completely smashed, nil for any other line.
+function Sensors.DrunkLevel(text)
+	if IsSecret(text) or type(text) ~= "string" then
+		return nil
+	end
+	for level, line in ipairs(DrunkLines()) do
+		if text == line.plain or (line.pattern and text:find(line.pattern)) then
+			return level - 1
+		end
+	end
+	return nil
+end
+
 -- After a loading screen the new place counts at once.
 function Sensors.OnLoadingScreen(moved)
 	shelterMemory = {}
