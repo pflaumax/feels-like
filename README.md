@@ -74,6 +74,8 @@ Open Options, then AddOns, then Feels Like. You can
 
 **Does it change gameplay?** No. It only shows a gauge.
 
+**Does the cold slow me down?** No. Addons can't change your stats, your speed or your health, and Feels Like wouldn't if it could. The cold is for your roleplay.
+
 **Does it need other addons?** No. It also works with ClassicUI Forever.
 
 **Which versions of the game?** It's made for WoW Forever. It also loads on Retail, but there only a few old zones have a climate, so most places read as Mild.
@@ -92,7 +94,7 @@ local value, word, cozy = FeelsLike.GetTemperature()
 
 - `value` is the felt temperature from -100 (coldest) to 100 (hottest), the addon's own scale, not degrees.
 - `word` is the word for that reading: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.
-- `cozy` is true by a fire or in an inn.
+- `cozy` is true by a fire or in an inn when the reading there is Mild or Warm. Cold by a fire is not Cozy, and neither is a hot inn.
 
 It always returns the real reading, also while `/feels test` moves the gauge, and nothing before the first reading, right after login. `FeelsLike.API_VERSION` is 1 and goes up only when a change breaks callers.
 

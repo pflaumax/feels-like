@@ -118,6 +118,7 @@ local function InstallGlobals(forever)
 	_G.Minimap = Widget()
 	_G.InCombatLockdown = function() return world.combat end
 	_G.UnitIsDeadOrGhost = function() return world.dead end
+	_G.UnitIsFeignDeath = function() return world.feign end
 	_G.GetTime = function() return world.time end
 	_G.UnitPosition = function() return world.pos.y, world.pos.x, 0, world.pos.map end
 	_G.GetUnitSpeed = function() return world.speed end
@@ -1406,6 +1407,12 @@ check("no line as a ghost", #chatLines == 0, #chatLines)
 world.dead = false
 Tick(4) -- back from the ghost's Cold, the real word settles first
 check("the line after coming back", #chatLines == 1, #chatLines)
+Tick(15 * 60) -- long after the line, so only the ghost's cold could bring it back
+world.dead = true
+Tick(10)
+world.dead = false
+Tick(10)
+check("no new line back in the same cold", #chatLines == 1, #chatLines)
 -- Nothing during a test.
 LoadQuietly()
 GoMild()
@@ -1463,6 +1470,16 @@ Tick(1)
 check("a ghost's swim leaves the body dry", Slash("debug"):find("wetness 0.00", 1, true))
 check("back alive, the desert again", ns.Gauge.target > 90, ns.Gauge.target)
 check("debug no longer says dead", not Slash("debug"):find("dead:", 1, true))
+world.dead, world.feign = true, true
+Tick(1)
+check("feign death is alive", ns.Gauge.target > 90 and not Slash("debug"):find("dead:", 1, true), ns.Gauge.target)
+local feignIsSecret = _G.issecretvalue
+world.feign = "secret"
+_G.issecretvalue = function(value) return value == "secret" end
+Tick(1)
+check("a secret feign death counts as dead", ns.Gauge.target == -65, ns.Gauge.target)
+_G.issecretvalue = feignIsSecret
+world.dead, world.feign = false, false
 
 -- Race, in Dun Morogh before dawn in snow (-88 for a human).
 ns = LoadAddon(true)
@@ -1675,6 +1692,20 @@ ns = LoadAddon(false)
 world.mapID, world.zoneText, world.hour = 27, "Dun Morogh", 5
 check("retail dwarf", math.abs(RaceTarget("Dwarf") - (-51)) < 0.01, ns.Gauge.target)
 world.race, world.raceName = "Human", "Human"
+
+-- A client without C_EventUtils still gets the drunk lines and the forms, but not the weather.
+ns = LoadAddon(true)
+_G.C_EventUtils = nil
+createdFrames = {}
+loadedCallback()
+local registered = {}
+for _, frame in ipairs(createdFrames) do
+	for event in pairs(frame.events or {}) do
+		registered[event] = true
+	end
+end
+check("standard events without C_EventUtils", registered.CHAT_MSG_SYSTEM and registered.UPDATE_SHAPESHIFT_FORM
+	and not registered.WEATHER_CHANGED)
 
 -- A drink warms you, in Dun Morogh before dawn in snow (-88).
 ns = LoadAddon(true)

@@ -568,9 +568,13 @@ function Sensors.Read()
 	state.race = race
 	state.raceName = not IsSecret(raceName) and raceName or nil
 	state.form = Sensors.ReadForm()
-	-- Dead, before or after the release: a ghost or a wisp.
+	-- Dead, before or after the release: a ghost or a wisp. A hunter's Feign Death is alive.
 	local dead = UnitIsDeadOrGhost("player")
-	state.dead = not IsSecret(dead) and dead or false
+	local feigning = UnitIsFeignDeath and UnitIsFeignDeath("player")
+	if IsSecret(feigning) then
+		feigning = false
+	end
+	state.dead = not IsSecret(dead) and dead and not feigning or false
 	state.burning = ns.Model.Burning(lastFireHit and GetTime() - lastFireHit, state.swimming)
 	state.fireSpell = ns.Model.FireSpellBurning(lastFireSpellHit and GetTime() - lastFireSpellHit)
 	return state

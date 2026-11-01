@@ -115,9 +115,11 @@ local function Update()
 		ns.Gauge:SetTarget(result.target)
 		ns.Gauge:SetCozy(result.cozy)
 	end
-	-- The character's own reaction, now and then. Combat, a test or a ghost hold it back for later.
-	local held = test ~= nil or InCombatLockdown() or state.dead
-	ns.Flavor.OnReading(result, now, held, not FeelsLikeDB.flavor)
+	-- The character's own reaction, now and then. Combat or a test holds it back for later. A ghost's cold is
+	-- no news, so the lines wait for the real reading.
+	if not state.dead then
+		ns.Flavor.OnReading(result, now, test ~= nil or InCombatLockdown(), not FeelsLikeDB.flavor)
+	end
 end
 
 -- For other addons. Read only.
@@ -413,14 +415,13 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 	for _, event in ipairs(UPDATE_EVENTS) do
 		events:RegisterEvent(event)
 	end
-	-- Only register events the client knows.
-	for _, event in ipairs({ "WEATHER_CHANGED", "UPDATE_SHAPESHIFT_FORM" }) do
-		if C_EventUtils and C_EventUtils.IsEventValid(event) then
-			events:RegisterEvent(event)
-		end
+	-- Only Forever knows the weather.
+	if C_EventUtils and C_EventUtils.IsEventValid("WEATHER_CHANGED") then
+		events:RegisterEvent("WEATHER_CHANGED")
 	end
 	-- The game's drunk lines come as system lines.
 	events:RegisterEvent("CHAT_MSG_SYSTEM")
+	events:RegisterEvent("UPDATE_SHAPESHIFT_FORM")
 	-- Fire damage, end of combat and campfire aura updates.
 	events:RegisterUnitEvent("UNIT_COMBAT", "player")
 	events:RegisterUnitEvent("UNIT_AURA", "player")

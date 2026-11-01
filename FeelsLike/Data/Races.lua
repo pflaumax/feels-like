@@ -29,13 +29,13 @@ ns.Races = {
 ns.UndeadFeel = {
 	numb = ns.Races.Scourge,
 	cold = Undead(Body(0.4, 0.4, -40)), -- runs cold: chilly almost everywhere
-	living = Body(1, 1), -- like a human, also in fire
+	living = ns.Races.Human, -- also in fire
 }
 ns.UndeadFeelNames = { numb = "Numb", cold = "Always cold", living = "Like the living" }
 ns.UndeadFeelOrder = { "numb", "cold", "living" } -- as the settings list them
 
 -- Forms with fur feel like a tauren. Keys are GetShapeshiftFormID's IDs.
-ns.Fur = Body(0.75, 1.15)
+ns.Fur = ns.Races.Tauren
 ns.FurForms = {
 	[1] = "Cat Form",
 	[3] = "Travel Form",
