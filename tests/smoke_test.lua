@@ -1578,6 +1578,98 @@ CoreEvent("UPDATE_SHAPESHIFT_FORM")
 check("form event updates at once", reads == 1 and math.abs(ns.Gauge.target - (-66)) < 0.01, ns.Gauge.target)
 ns.Sensors.Read = realRead
 world.form = nil
+-- Fire spells in a fight scorch the undead.
+check("numb undead before the fight", math.abs(RaceTarget("Scourge", "Undead") - (-44)) < 0.01, ns.Gauge.target)
+world.combat = true
+FireHit()
+check("a fireball scorches the undead", ns.Gauge.target == 100, ns.Gauge.target)
+debugText = Slash("debug")
+check("debug shows fire spells", debugText:find("fire underfoot 0.00, fire spells 1.00 (undead): +144.0", 1, true), debugText)
+Tick(1)
+check("a fireball holds a moment", ns.Gauge.target == 100, ns.Gauge.target)
+Tick(2)
+check("a fireball fades", ns.Gauge.target > -44 and ns.Gauge.target < 100, ns.Gauge.target)
+Tick(2)
+check("a fireball faded", math.abs(ns.Gauge.target - (-44)) < 0.01, ns.Gauge.target)
+FeelsLikeDB.undead = "cold"
+Tick(1)
+FireHit()
+check("a fireball scorches undead that run cold", math.abs(ns.Gauge.target - 100) < 0.01, ns.Gauge.target)
+Tick(5)
+FeelsLikeDB.undead = "living"
+Tick(1)
+FireHit()
+check("a fireball does not burn undead like the living", math.abs(ns.Gauge.target - (-88)) < 0.01, ns.Gauge.target)
+check("debug has no fire spells for undead like the living", not Slash("debug"):find("fire spells", 1, true))
+FeelsLikeDB.undead = "numb"
+FeelsLikeDB.race = false
+Tick(1)
+FireHit()
+check("a fireball does not burn with race off", math.abs(ns.Gauge.target - (-88)) < 0.01, ns.Gauge.target)
+FeelsLikeDB.race = true
+check("a fireball does not burn a human", math.abs(RaceTarget("Human") - (-88)) < 0.01 and FireHit()
+	and math.abs(ns.Gauge.target - (-88)) < 0.01, ns.Gauge.target)
+check("debug has no fire spells for a human", not Slash("debug"):find("fire spells", 1, true))
+Tick(5)
+-- Just after the fight, fire is still a spell.
+RaceTarget("Scourge", "Undead")
+world.combat = false
+CoreEvent("PLAYER_REGEN_ENABLED")
+Tick(5)
+FireHit()
+check("a fire DoT after the fight scorches the undead", ns.Gauge.target == 100, ns.Gauge.target)
+check("debug shows a fire spell after the fight", Slash("debug"):find("fire underfoot 0.00, fire spells 1.00", 1, true))
+Tick(11)
+FireHit()
+check("fire underfoot after the grace", Slash("debug"):find("fire underfoot 1.00, fire spells 0.00", 1, true))
+Tick(10)
+-- A fire spell does not dry wet clothes at once.
+world.swimming = true
+Tick(1)
+world.swimming = false
+world.combat = true
+FireHit()
+Tick(1)
+world.combat = false
+check("a fireball leaves clothes wet", not Slash("debug"):find("wetness 0.00", 1, true))
+Tick(300)
+-- Fire spells do not dry clothes faster either.
+local function WetnessAfterFight(fireballs)
+	world.swimming = true
+	Tick(1)
+	world.swimming = false
+	world.combat = true
+	for _ = 1, 20 do
+		if fireballs then
+			FireHit()
+		end
+		Tick(1)
+	end
+	world.combat = false
+	local wet = Slash("debug"):match("wetness (%d%.%d%d)")
+	Tick(300)
+	return wet
+end
+local wetWithout = WetnessAfterFight(false)
+check("fireballs dry clothes no faster", wetWithout ~= nil and WetnessAfterFight(true) == wetWithout, wetWithout)
+-- Only a body that feels fire spells reads again at a hit in a fight.
+local realRead, reads = ns.Sensors.Read, 0
+ns.Sensors.Read = function()
+	reads = reads + 1
+	return realRead()
+end
+world.combat = true
+FireHit()
+check("a fireball reads again for the undead", reads == 1, reads)
+RaceTarget("Human")
+reads = 0
+FireHit()
+check("a fireball waits for the tick for a human", reads == 0, reads)
+world.combat = false
+ns.Sensors.Read = realRead
+Tick(20)
+world.race, world.raceName = "Human", "Human"
+Tick(1)
 -- Retail reads the race too.
 ns = LoadAddon(false)
 world.mapID, world.zoneText, world.hour = 27, "Dun Morogh", 5

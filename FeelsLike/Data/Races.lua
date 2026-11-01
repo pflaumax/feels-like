@@ -1,5 +1,5 @@
 -- How strongly each race feels the cold and the heat. 1 is like a human. Keys are UnitRace's English names.
--- A shift moves the whole feel, for a body that runs cold.
+-- A shift moves the whole feel, for a body that runs cold. Fire spells in a fight burn a body with fireSpells.
 
 local _, ns = ...
 
@@ -7,12 +7,18 @@ local function Body(cold, heat, shift)
 	return { cold = cold, heat = heat, shift = shift }
 end
 
+-- Dead flesh fears fire: a fire spell scorches it, not only fire underfoot.
+local function Undead(body)
+	body.fireSpells = true
+	return body
+end
+
 ns.Races = {
 	Human = Body(1, 1),
 	Orc = Body(1, 1),
 	Dwarf = Body(0.75, 1),
 	NightElf = Body(1, 1),
-	Scourge = Body(0.5, 0.6), -- Undead
+	Scourge = Undead(Body(0.5, 0.6)),
 	Tauren = Body(0.75, 1.15),
 	Gnome = Body(1, 1),
 	Troll = Body(1.2, 0.8),
@@ -22,8 +28,8 @@ ns.Races = {
 -- The undead choose how they feel. Numb is the default.
 ns.UndeadFeel = {
 	numb = ns.Races.Scourge,
-	cold = Body(0.4, 0.4, -40), -- runs cold: chilly almost everywhere
-	living = Body(1, 1),
+	cold = Undead(Body(0.4, 0.4, -40)), -- runs cold: chilly almost everywhere
+	living = Body(1, 1), -- like a human, also in fire
 }
 ns.UndeadFeelNames = { numb = "Numb", cold = "Always cold", living = "Like the living" }
 ns.UndeadFeelOrder = { "numb", "cold", "living" } -- as the settings list them

@@ -267,6 +267,25 @@ check("lava: swimming with a fresh hit burns", Model.Burning(1, true), 1)
 check("water puts the fire out", Model.Burning(3, true), 0)
 near("out of the water it fades as usual", Model.Burning(4.5, false), 0.5)
 
+-- Fire spells in a fight
+check("no fire spell", Model.FireSpellBurning(nil), 0)
+check("fire spell just hit", Model.FireSpellBurning(0), 1)
+check("fire spell holds a moment", Model.FireSpellBurning(1), 1)
+near("fire spell fading", Model.FireSpellBurning(2.5), 0.5)
+check("fire spell faded", Model.FireSpellBurning(4), 0)
+local numbUndead = ns.UndeadFeel.numb
+near("a fire spell scorches the undead", Model.Compute(state({ base = -60, fireSpell = 1, body = numbUndead }), 0).target, 100)
+near("a fading fire spell", Model.Compute(state({ base = -60, fireSpell = 0.5, body = numbUndead }), 0).target, 35)
+near("a fire spell scorches undead that run cold", Model.Compute(state({ base = -60, fireSpell = 1, body = ns.UndeadFeel.cold }), 0).target, 100)
+near("a fire spell does not burn a human", Model.Compute(state({ base = -60, fireSpell = 1 }), 0).target, -60)
+near("a fire spell does not burn undead like the living", Model.Compute(state({ base = -60, fireSpell = 1, body = ns.UndeadFeel.living }), 0).target, -60)
+near("a fire spell does not burn a dwarf", Model.Compute(state({ base = -60, fireSpell = 1, body = ns.Races.Dwarf }), 0).target, -45)
+near("burning reports the fire spell", Model.Compute(state({ base = -60, fireSpell = 0.5, body = numbUndead }), 0).burning, 0.5)
+near("burning takes the stronger fire", Model.Compute(state({ base = -60, burning = 1, fireSpell = 0.5, body = numbUndead }), 0).burning, 1)
+near("burning without a fire spell for a human", Model.Compute(state({ base = -60, fireSpell = 1 }), 0).burning, 0)
+check("the undead fear fire", ns.Races.Scourge.fireSpells and ns.UndeadFeel.cold.fireSpells, true)
+check("only the undead fear fire", ns.UndeadFeel.living.fireSpells or ns.Races.Dwarf.fireSpells or ns.Fur.fireSpells, nil)
+
 -- A drink warms a cold body
 near("sober", Model.Compute(state({ base = -60, drunk = 0 }), 0).target, -60)
 near("tipsy in the snow", Model.Compute(state({ base = -60, drunk = 1 }), 0).target, -50)

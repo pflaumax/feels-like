@@ -63,7 +63,7 @@ function Options:Register(db)
 	local undead = Settings.RegisterAddOnSetting(category, "FEELSLIKE_UNDEAD", "undead", db,
 		Settings.VarType.String, "Undead feel", defaults.undead)
 	Settings.CreateDropdown(category, undead, UndeadOptions,
-		"Only for undead characters, while Feel by race is on. Numb: they hardly feel the weather. Always cold: their bodies run cold, so they feel chilly almost everywhere. Like the living: they feel the weather like a human.")
+		"Only for undead characters, while Feel by race is on. Numb: they hardly feel the weather. Always cold: their bodies run cold, so they feel chilly almost everywhere. Like the living: they feel the weather like a human. Numb and always cold undead fear fire: a fire spell in a fight scorches them for a moment.")
 
 	local flavor = Settings.RegisterAddOnSetting(category, "FEELSLIKE_FLAVOR", "flavor", db,
 		Settings.VarType.Boolean, "Flavor lines in chat", defaults.flavor)

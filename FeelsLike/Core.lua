@@ -102,7 +102,7 @@ local function Update()
 	local now = GetTime()
 	-- A ghost's swim leaves the body dry.
 	if lastState and not lastState.dead then
-		wetness = ns.Model.UpdateWetness(wetness, now - lastUpdate, lastState, lastResult.drying + lastResult.burn)
+		wetness = ns.Model.UpdateWetness(wetness, now - lastUpdate, lastState, lastResult.drying)
 	end
 	lastUpdate = now
 
@@ -117,7 +117,7 @@ local function Update()
 	end
 	-- The character's own reaction, now and then. Combat, a test or a ghost hold it back for later.
 	local held = test ~= nil or InCombatLockdown() or state.dead
-	ns.Flavor.OnReading(result, state, now, held, not FeelsLikeDB.flavor)
+	ns.Flavor.OnReading(result, now, held, not FeelsLikeDB.flavor)
 end
 
 -- For other addons. Read only.
@@ -264,7 +264,11 @@ local function PrintDebug()
 		drink = string.format("%s (%d min)", DRUNK_NAMES[s.drunk], math.floor((GetTime() - FeelsLikeDB.drink.at) / 60))
 	end
 	print(string.format("  drink %s: %s", drink, Signed(r.drink)))
-	print(string.format("  fire underfoot %.2f: %s", s.burning, Signed(r.burn)))
+	local fireSpells = ""
+	if s.body and s.body.fireSpells then
+		fireSpells = string.format(", fire spells %.2f (undead)", s.fireSpell)
+	end
+	print(string.format("  fire underfoot %.2f%s: %s", s.burning, fireSpells, Signed(r.burn)))
 	print("  resistance, not counted yet: " .. DescribeResistances(ns.Sensors.ReadResistances()))
 	if s.dead then
 		print(string.format("  dead: the reading stays at %s until you are back", Signed(ns.Model.DEAD_FEEL)))
@@ -427,7 +431,9 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 			if ns.Sensors.IsFireHit(action, amount, schoolMask) then
 				-- A fire mob can hit before combat starts, so check again next frame.
 				C_Timer.After(0, function()
-					if ns.Sensors.AcceptFireHit() then
+					-- Only a body that feels fire spells needs the reading now. The rest wait for the tick.
+					local fireSpell = ns.Sensors.OnFireHit()
+					if not fireSpell or (lastState and lastState.body and lastState.body.fireSpells) then
 						Update()
 					end
 				end)

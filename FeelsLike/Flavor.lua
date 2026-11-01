@@ -65,9 +65,9 @@ local lastKey, lastLineAt
 local turn = {}
 
 -- Which lines fit the reading, or nil.
-local function LinesFor(result, state)
+local function LinesFor(result)
 	local word = ns.Model.Band(result.target, result.cozy).word
-	if word == "Scorching" and (state.burning or 0) > 0 then
+	if word == "Scorching" and result.burning > 0 then
 		return "burning"
 	elseif word == "Cozy" then
 		return result.inn and "cozyInn" or "cozyFire"
@@ -86,8 +86,8 @@ function Flavor.OnLogin(now)
 end
 
 -- Called after every reading. held keeps the line for later (combat, a test, a ghost); off drops it.
-function Flavor.OnReading(result, state, now, held, off)
-	local key = LinesFor(result, state)
+function Flavor.OnReading(result, now, held, off)
+	local key = LinesFor(result)
 	quietUntil = quietUntil or now + LOGIN_QUIET
 	if key ~= current then
 		current, since, done = key, now, false

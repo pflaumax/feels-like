@@ -159,6 +159,9 @@ local RAIN_SOAK_TIME = 60 -- seconds of rain from dry to soaked
 -- Fire underfoot hits about every 2 seconds.
 local BURN_HOLD = 2.5 -- seconds at full heat after the last hit
 local BURN_FADE = 4 -- seconds to fade back to normal
+-- A fire spell in a fight burns a body that feels it for a moment.
+local FIRE_SPELL_HOLD = 1
+local FIRE_SPELL_FADE = 3
 
 -- A drink warms a cold body: tipsy, drunk, completely smashed.
 local DRINK_WARMTH = { 10, 20, 30 }
@@ -190,6 +193,11 @@ function Model.Burning(secondsSinceHit, swimming)
 		return 0
 	end
 	return Fade(secondsSinceHit, BURN_HOLD, BURN_FADE)
+end
+
+-- 1 right after a fire spell hit, then fades to 0.
+function Model.FireSpellBurning(secondsSinceHit)
+	return Fade(secondsSinceHit, FIRE_SPELL_HOLD, FIRE_SPELL_FADE)
 end
 
 -- 1 near the spot by the fire, then fades to 0 when you walk away.
@@ -312,9 +320,11 @@ function Model.Compute(state, wetness)
 	r.race = scaled - unscaled
 	-- A drink warms only a cold body, and never past the middle of Mild.
 	r.drink = math.min(DRINK_WARMTH[state.drunk] or 0, math.max(0, -scaled))
-	-- Fire underfoot pulls the reading toward hot.
+	-- Fire underfoot pulls the reading toward hot. Fire spells in a fight burn only a body that feels them.
 	local beforeBurn = scaled + r.drink
-	r.burn = math.max(0, (Model.MAX - beforeBurn) * (state.burning or 0))
+	local fireSpell = state.body and state.body.fireSpells and state.fireSpell or 0
+	r.burning = math.max(state.burning or 0, fireSpell)
+	r.burn = math.max(0, (Model.MAX - beforeBurn) * r.burning)
 	r.felt = beforeBurn + r.burn
 	r.target = Model.Clamp(r.felt)
 

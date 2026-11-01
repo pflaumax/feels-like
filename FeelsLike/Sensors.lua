@@ -94,10 +94,11 @@ local campfireLoadedAt
 local LOADING_SETTLE = 5 -- the client is still loading auras
 local campSeat -- the Welcoming Campfire you sat with
 
--- Fire damage outside combat.
+-- Fire damage outside combat is fire underfoot, in a fight it is a fire spell.
 local COMBAT_GRACE = 15 -- seconds
 local lastCombatEnd
 local lastFireHit
+local lastFireSpellHit
 local shelterMemory = {}
 
 -- Walk up the map parents to a known zone.
@@ -444,14 +445,15 @@ function Sensors.IsFireHit(action, amount, schoolMask)
 	return action == "WOUND" and amount ~= nil and amount > 0 and bit.band(schoolMask or 0, FIRE_MASK) ~= 0
 end
 
--- Checked one frame after the hit. True when it counts as fire underfoot.
-function Sensors.AcceptFireHit()
+-- Checked one frame after the hit. In a fight or just after it, the hit is a fire spell: returns true.
+function Sensors.OnFireHit()
 	local now = GetTime()
 	if InCombatLockdown() or (lastCombatEnd and now - lastCombatEnd < COMBAT_GRACE) then
-		return false
+		lastFireSpellHit = now
+		return true
 	end
 	lastFireHit = now
-	return true
+	return false
 end
 
 -- The game's lines when you get drunk or sober, sober first. Its own translations, so every language works.
@@ -570,5 +572,6 @@ function Sensors.Read()
 	local dead = UnitIsDeadOrGhost("player")
 	state.dead = not IsSecret(dead) and dead or false
 	state.burning = ns.Model.Burning(lastFireHit and GetTime() - lastFireHit, state.swimming)
+	state.fireSpell = ns.Model.FireSpellBurning(lastFireSpellHit and GetTime() - lastFireSpellHit)
 	return state
 end

@@ -20,11 +20,11 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 **Torch.** Light the Night Watchman's Torch or hold a lit torch, and a cold night gets a bit warmer.
 
-**Fire underfoot.** Step into a campfire or lava and the needle jumps to scorching. Fire spells from enemies don't count.
+**Fire underfoot.** Step into a campfire or lava and the needle jumps to scorching. Fire spells from enemies don't count, except for the undead (see Race).
 
 **Water.** A swim chills you. It's cold in a mild zone, freezing in the snow and just refreshing in a desert. Your clothes dry over time, and faster when it's warm.
 
-**Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either. Druids in cat, bear, travel or moonkin form have fur, like tauren. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
+**Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either, but they fear fire: a fire spell in a fight scorches them for a moment. Druids in cat, bear, travel or moonkin form have fur, like tauren. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
 
 **Drink.** Get tipsy and a cold night feels a little warmer. The more you drink, the warmer, but never past Mild, and the heat stays the same. The addon follows the game's own lines like "You feel tipsy. Whee!", so it works in every language.
 
