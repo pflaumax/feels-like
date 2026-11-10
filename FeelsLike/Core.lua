@@ -9,6 +9,8 @@ ns.DEFAULTS = {
 	race = true,
 	undead = "numb",
 	flavor = true,
+	seasons = true,
+	language = ns.Locale.DEFAULT,
 	-- Default gauge size for Forever and Retail.
 	scale = ns.Sensors.isForever and 0.53 or 0.45,
 }
@@ -52,6 +54,25 @@ local testRun = 0
 local function Print(message)
 	print(PREFIX .. message)
 end
+ns.Print = Print
+
+-- Opens the settings, from the slash command or a click on the panel feed.
+local function OpenSettings()
+	if InCombatLockdown() then
+		Print(ns.T("settings open after combat."))
+		return
+	end
+	ns.Options:Open()
+end
+
+-- Changes the language of the word, the tooltip, the panel feed and the lines in chat at once.
+-- The settings page keeps its texts until a /reload.
+function ns.SetLanguage(language)
+	ns.Locale.Set(language)
+	ns.Gauge:Refresh()
+	ns.Broker.Refresh()
+	Print(ns.T("type /reload to change the settings page too."))
+end
 
 -- Version of the saved settings.
 local DB_VERSION = 2
@@ -64,6 +85,10 @@ local function InitDB()
 		FeelsLikeDB.scale = nil
 	end
 	FeelsLikeDB.version = DB_VERSION
+	-- A language that is gone goes back to the default.
+	if FeelsLikeDB.language ~= nil and not ns.Locale.Has(FeelsLikeDB.language) then
+		FeelsLikeDB.language = nil
+	end
 	-- An undead choice that is gone, like Always cold of 0.2.0, goes back to the default.
 	if FeelsLikeDB.undead ~= nil and not ns.UndeadFeel[FeelsLikeDB.undead] then
 		FeelsLikeDB.undead = nil
@@ -93,17 +118,34 @@ local function ChooseBody(state)
 	if state.raceOff then
 		return nil
 	elseif state.form and ns.FurForms[state.form] then
+		state.bodyWord = "your fur"
 		return ns.Fur
 	elseif state.race == "Scourge" then
 		state.undead = ns.UndeadFeel[FeelsLikeDB.undead] and FeelsLikeDB.undead or ns.DEFAULTS.undead
+		state.bodyWord = "dead flesh"
 		return ns.UndeadFeel[state.undead]
 	end
+	state.bodyWord = state.race == "Tauren" and "your fur" or "your race"
 	return state.race and ns.Races[state.race]
+end
+
+-- Wet clothes this wet get their own lines in chat.
+local SOAKED = 0.7
+
+-- Which lines in chat fit the character: the undead do not breathe and fur is fur, whatever the settings say.
+local function BodyKind(state)
+	if state.race == "Scourge" then
+		return "undead"
+	elseif state.race == "Tauren" or (state.form and ns.FurForms[state.form]) then
+		return "fur"
+	end
+	return nil
 end
 
 local function Update()
 	-- Update how wet the clothes are since the last update.
 	local now = GetTime()
+	local previous = lastState
 	-- A ghost's swim leaves the body dry.
 	if lastState and not lastState.dead then
 		wetness = ns.Model.UpdateWetness(wetness, now - lastUpdate, lastState, lastResult.drying)
@@ -113,18 +155,37 @@ local function Update()
 	local state = ns.Sensors.Read()
 	state.body = ChooseBody(state)
 	state.drunk = Drunk(now)
+	state.seasonsOff = not FeelsLikeDB.seasons
 	local result = ns.Model.Compute(state, wetness)
 	lastState, lastResult = state, result
 	if not test then
 		ns.Gauge:SetTarget(result.target)
 		ns.Gauge:SetCozy(result.cozy)
 	end
+	local colder, warmer = ns.Model.Reasons(state, result)
+	ns.Gauge:SetReasons(colder, warmer, test ~= nil)
+	ns.Broker.Update(result.target, result.cozy, colder, warmer)
 	-- The character's own reaction, now and then. Combat or a test holds it back for later. A ghost's cold is
 	-- no news, so the lines wait for the real reading.
 	if not state.dead then
-		-- The undead have their own lines whatever they feel, also with Feel by race off: they still do not breathe.
-		ns.Flavor.OnReading(result, now, test ~= nil or InCombatLockdown(), not FeelsLikeDB.flavor,
-			state.race == "Scourge")
+		local held, off = test ~= nil or InCombatLockdown(), not FeelsLikeDB.flavor
+		local kind = BodyKind(state)
+		ns.Flavor.OnReading(result, now, held, off, {
+			kind = kind,
+			soaked = wetness >= SOAKED and not state.swimming,
+			weather = not (state.indoors or state.inside) and state.weather or nil,
+		})
+		-- A torch you just lit in the cold.
+		if previous and not previous.torch and result.torch > 0 then
+			ns.Flavor.OnEvent("torch", now, held, off, kind)
+		end
+	end
+end
+
+-- A drink that warms you is worth a line. Called when the game says you got more drunk.
+local function OnDrink()
+	if lastState and not lastState.dead and lastResult.drink > 0 then
+		ns.Flavor.OnEvent("drink", GetTime(), test ~= nil or InCombatLockdown(), not FeelsLikeDB.flavor, BodyKind(lastState))
 	end
 end
 
@@ -219,6 +280,9 @@ local function PrintDebug()
 			s.weather or "clear", s.weatherIntensity, Signed(r.weather),
 			tostring(info and info.type), tostring(info and info.intensity)))
 	end
+	local today = s.seasonsOff and " (off in settings)"
+		or s.month and string.format(" (month %d, day %d)", s.month, s.day) or " (no calendar)"
+	print(string.format("  season %s%s: %s", r.seasonName or "none", today, Signed(r.season)))
 	print(string.format("  humid air: %s", Signed(r.humid)))
 	local ownShelter = ns.Model.HasOwnShelter(s)
 	local shelter = ownShelter and (s.inInstance and "instance" or "inside as a whole") .. ", no shelter"
@@ -286,6 +350,7 @@ local function PrintDebug()
 	end
 	local fireDetails = #fireNotes > 0 and " (" .. table.concat(fireNotes, "; ") .. ")" or ""
 	print(string.format("  fire underfoot %.2f%s: %s%s", s.burning, fireSpells, Signed(r.burn), fireDetails))
+	print(string.format("  frost spell %.2f: %s", s.frostSpell, Signed(r.frost)))
 	print("  resistance, not counted yet: " .. DescribeResistances(ns.Sensors.ReadResistances()))
 	if s.dead then
 		print(string.format("  dead: the reading stays at %s until you are back", Signed(ns.Model.DEAD_FEEL)))
@@ -294,6 +359,7 @@ local function PrintDebug()
 		r.capped and " (held below fire)" or "", test and " (test active, /feels test off)" or ""))
 	print("  flavor lines " .. ns.Flavor.Describe(GetTime(), FeelsLikeDB.flavor))
 	print("  renderer: " .. ns.Gauge.renderer)
+	print("  panel feed: " .. ns.Broker.Describe())
 	print("  position: " .. ns.Gauge:DescribePosition())
 end
 
@@ -403,11 +469,7 @@ SlashCmdList.FEELSLIKE = function(input)
 	command = command:lower()
 	arg = arg and strtrim(arg)
 	if command == "" then
-		if InCombatLockdown() then
-			Print("settings open after combat.")
-			return
-		end
-		ns.Options:Open()
+		OpenSettings()
 	elseif command == "debug" then
 		PrintDebug()
 	elseif command == "auras" then
@@ -423,6 +485,7 @@ end
 
 EventUtil.ContinueOnAddOnLoaded(addonName, function()
 	local db = InitDB()
+	ns.Locale.Set(db.language)
 	ns.Gauge:Create(db)
 	ns.Options:Register(db)
 
@@ -442,6 +505,7 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 	events:RegisterUnitEvent("UNIT_AURA", "player")
 	events:RegisterEvent("PLAYER_REGEN_ENABLED")
 	events:SetScript("OnEvent", function(_, event, ...)
+		local drankMore = false
 		if event == "UNIT_COMBAT" then
 			local _, action, _, amount, schoolMask = ...
 			if ns.Sensors.IsFireHit(action, amount, schoolMask) then
@@ -453,6 +517,9 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 						Update()
 					end
 				end)
+			elseif ns.Sensors.IsFrostHit(action, amount, schoolMask) then
+				ns.Sensors.OnFrostHit()
+				Update()
 			end
 			return
 		elseif event == "CHAT_MSG_SYSTEM" then
@@ -460,6 +527,7 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 			if not level then
 				return
 			end
+			drankMore = level > Drunk(GetTime())
 			FeelsLikeDB.drink = level > 0 and { level = level, at = GetTime() } or nil
 			drinkBeforeReload = nil -- the new line wins
 		elseif event == "UNIT_AURA" then
@@ -476,6 +544,8 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 			end
 		elseif event == "PLAYER_ENTERING_WORLD" then
 			local isInitialLogin, isReloadingUi = ...
+			-- By now every addon has loaded, also a panel that brings LibDataBroker.
+			ns.Broker.Register(OpenSettings)
 			ns.Sensors.OnLoadingScreen(not (isInitialLogin or isReloadingUi))
 			if isInitialLogin or isReloadingUi then
 				ns.Flavor.OnLogin(GetTime())
@@ -486,10 +556,14 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 			drinkBeforeReload = nil
 		end
 		Update()
+		if drankMore then
+			OnDrink()
+		end
 	end)
 
 	C_Timer.NewTicker(TICK, function()
 		Update()
 	end)
+	ns.Broker.Register(OpenSettings)
 	Update()
 end)

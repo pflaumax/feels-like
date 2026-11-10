@@ -8,6 +8,8 @@
 ## SavedVariables: FeelsLikeDB
 
 Model.lua
+Locale.lua
+Locale\uk.lua
 Data\Zones.lua
 Data\Instances.lua
 Data\Races.lua
@@ -17,4 +19,5 @@ DialVector.lua
 DialLines.lua
 Gauge.lua
 Options.lua
+Broker.lua
 Core.lua

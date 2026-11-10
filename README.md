@@ -12,15 +12,19 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 **Time of day.** Deserts burn in the afternoon and cool down at night. The coldest moment is just before dawn.
 
+**Seasons.** In winter the world is a little colder and in summer a little warmer, most of all during Winter Veil and Midsummer. It follows the server's calendar, and you can turn it off in the settings.
+
 **Weather.** Rain and snow cool you down, and sandstorms heat you up.
 
-**Shelter.** A building feels like a warm room. It's cooler than a hot day outside and warmer than a freezing night. An inn feels cozy. Volcanic heat comes from the ground, so a roof doesn't help there.
+**Shelter.** A building feels like a warm room. It's cooler than a hot day outside and warmer than a freezing night. An inn feels cozy. In the snow a cave or a cold house only keeps the wind out. Volcanic heat comes from the ground, so a roof doesn't help there.
 
 **Campfire.** Sit by a fire to warm up and feel cozy, including the new camp fires in Forever. Once you sat down, you can get up and walk around the fire and still stay warm. A fire makes you warm but never hot.
 
 **Torch.** Light the Night Watchman's Torch or hold a lit torch, and a cold night gets a bit warmer.
 
 **Fire underfoot.** Step into a campfire or lava and the needle jumps to the very top of the scale. No weather takes it that far. Fire spells from enemies don't count, except for the undead (see Race). In a fight, and for a few seconds after it, the game can't tell a fire underfoot from a fire spell, so only lava in volcanic places counts then.
+
+**Frost spells.** A frost spell that hits you chills you to the bone for a moment.
 
 **Water.** A swim chills you. It's cold in a mild zone, freezing in the snow and just refreshing in a desert. Your clothes dry over time, and faster when it's warm. Hot springs are the exception: a swim there doesn't chill you.
 
@@ -32,9 +36,9 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 ## Reading the gauge
 
-Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see one word next to it, like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.
+Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see one word next to it, like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy, and a tooltip that says what makes you colder or warmer right now.
 
-Now and then your character reacts with a short line in chat that only you see, like "A chill runs down your back." when the cold sets in, or "You warm your hands by the fire." The undead have their own lines, because they don't breathe or sweat. It never repeats itself often and stays quiet in combat.
+Now and then your character reacts with a short line in chat that only you see, like "A chill runs down your back." when the cold sets in, or "You warm your hands by the fire." There are lines for wet clothes, rain, a torch and a drink too. The undead have their own lines, because they don't breathe or sweat, and so do bodies with fur. It never repeats itself often and stays quiet in combat.
 
 The gauge sits by the minimap. Hold Shift and drag it to move it anywhere you like.
 
@@ -46,7 +50,9 @@ Open Options, then AddOns, then Feels Like. You can
 - show the word on hover, always or never
 - choose whether your race changes how you feel
 - choose how the undead feel: numb or like the living
+- turn seasons and holidays on or off
 - turn the lines in chat on or off
+- pick the language: English or Ukrainian
 - lock the gauge in place
 - change its size
 - put it back by the minimap
@@ -77,6 +83,10 @@ Open Options, then AddOns, then Feels Like. You can
 **Does the cold slow me down?** No. Addons can't change your stats, your speed or your health, and Feels Like wouldn't if it could. The cold is for your roleplay.
 
 **Does it need other addons?** No. It also works with ClassicUI Forever.
+
+**Does it work with Titan Panel?** Yes. With Titan Panel, ChocolateBar or any other panel that shows LibDataBroker feeds, Feels Like puts its word there too. Hover it for the reasons and click it for the settings.
+
+**Which languages?** English and Ukrainian. Pick the language in the settings: it changes the word, the tooltip and the lines in chat at once, and the settings page after a `/reload`. `/feels debug` stays English. Want another language? Send me the translated lines.
 
 **Which versions of the game?** It's made for WoW Forever. It also loads on Retail, but there only a few old zones have a climate, so most places read as Mild.
 

@@ -2,6 +2,7 @@
 
 local _, ns = ...
 local Model = ns.Model
+local T = ns.T
 
 local Gauge = {}
 ns.Gauge = Gauge
@@ -29,6 +30,19 @@ local frame, dial, label
 local db
 local hovered = false
 local moving = false
+-- Where the gauge was when the move started, to tell a move from a click.
+local moveStartX, moveStartY
+local MOVED = 1 -- pixels that count as a real move
+-- The hint about Shift is said once per session.
+local hintShown = false
+
+-- The tooltip says why the reading is what it is.
+local reasons = { colder = {}, warmer = {}, test = false }
+local COLDER_COLOR = { 0.56, 0.85, 0.94 }
+local WARMER_COLOR = { 0.96, 0.64, 0.27 }
+local HINT_COLOR = { 0.6, 0.6, 0.6 }
+-- What the open tooltip shows, so it is only built again when that changes and does not flicker.
+local tooltipShown
 
 Gauge.target = 0
 Gauge.display = 0
@@ -81,18 +95,61 @@ local function UpdateLabel()
 		return
 	end
 	local band = Model.Band(Gauge.target, Gauge.cozy)
-	label:SetText(band.word)
+	label:SetText(T(band.word))
 	label:SetTextColor(band.color[1], band.color[2], band.color[3])
 	PlaceLabel() -- the minimap may have moved
 	label:Show()
 end
 
--- A locked gauge only needs the mouse for the hover label.
+-- One tooltip line in the chosen language, like "Colder: a cold place, snow". Also for the panel feed.
+function Gauge.ReasonLine(title, words)
+	local translated = {}
+	for index, word in ipairs(words) do
+		translated[index] = T(word)
+	end
+	return T(title) .. ": " .. table.concat(translated, ", ")
+end
+
+-- Fills the tooltip while the mouse is on the gauge: the word, the reasons and how to move it.
+-- fresh is true when the mouse has just come.
+local function UpdateTooltip(fresh)
+	if not hovered then
+		return
+	end
+	local band = Model.Band(Gauge.target, Gauge.cozy)
+	local shown = table.concat({ band.word, table.concat(reasons.colder, ","), table.concat(reasons.warmer, ","),
+		tostring(reasons.test), tostring(db.locked), ns.Locale.language }, "|")
+	if not fresh and shown == tooltipShown then
+		return
+	end
+	tooltipShown = shown
+	GameTooltip:SetOwner(frame, "ANCHOR_BOTTOMLEFT")
+	GameTooltip:SetText(T(band.word), band.color[1], band.color[2], band.color[3])
+	if reasons.test then
+		GameTooltip:AddLine(T("A test value. /feels test off ends it."), HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3], true)
+	else
+		if #reasons.colder > 0 then
+			GameTooltip:AddLine(Gauge.ReasonLine("Colder", reasons.colder),
+				COLDER_COLOR[1], COLDER_COLOR[2], COLDER_COLOR[3], true)
+		end
+		if #reasons.warmer > 0 then
+			GameTooltip:AddLine(Gauge.ReasonLine("Warmer", reasons.warmer),
+				WARMER_COLOR[1], WARMER_COLOR[2], WARMER_COLOR[3], true)
+		end
+	end
+	if not db.locked then
+		GameTooltip:AddLine(T("Shift-drag to move"), HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3])
+	end
+	GameTooltip:Show()
+end
+
+-- A locked gauge only needs the mouse for the hover label. Without the mouse there is no tooltip.
 local function UpdateMouse()
 	local enabled = not db.locked or db.label == "hover"
 	frame:EnableMouse(enabled)
-	if not enabled then
+	if not enabled and hovered then
 		hovered = false
+		GameTooltip:Hide()
 	end
 end
 
@@ -136,29 +193,48 @@ function Gauge:Create(savedVariables)
 	labelFrame:SetFrameStrata(frame:GetFrameStrata())
 	label = labelFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 
-	-- Shift is needed to move the gauge.
-	frame:SetScript("OnDragStart", function(self)
-		if not db.locked and IsShiftKeyDown() then
-			moving = true
-			self:StartMoving()
+	-- Shift is needed to move the gauge. The move starts at the press, so it follows the mouse at once:
+	-- a drag only starts after the mouse has moved some way.
+	frame:SetScript("OnMouseDown", function(self, button)
+		if button ~= "LeftButton" or db.locked or not IsShiftKeyDown() then
+			return
 		end
+		moving = true
+		moveStartX, moveStartY = self:GetCenter()
+		self:StartMoving()
 	end)
-	-- Only save a real move.
-	frame:SetScript("OnDragStop", function(self)
+	-- Only save a real move. A press without a move keeps the old place.
+	frame:SetScript("OnMouseUp", function(self)
 		if not moving then
 			return
 		end
 		moving = false
 		self:StopMovingOrSizing()
-		SavePosition()
+		local x, y = self:GetCenter()
+		if x and moveStartX and (math.abs(x - moveStartX) >= MOVED or math.abs(y - moveStartY) >= MOVED) then
+			SavePosition()
+		else
+			Gauge:ApplyPosition()
+		end
+	end)
+	-- A drag without Shift moves nothing, so say why, once.
+	frame:SetScript("OnDragStart", function()
+		if moving or hintShown then
+			return
+		end
+		hintShown = true
+		ns.Print(T(db.locked and "the gauge is locked. Unlock it in the settings: /feels"
+			or "hold Shift and drag to move the gauge."))
 	end)
 	frame:SetScript("OnEnter", function()
 		hovered = true
 		UpdateLabel()
+		UpdateTooltip(true)
 	end)
 	frame:SetScript("OnLeave", function()
 		hovered = false
 		UpdateLabel()
+		GameTooltip:Hide()
 	end)
 
 	-- The minimap can change size or place after login.
@@ -198,6 +274,18 @@ function Gauge:SetCozy(cozy)
 	end
 	self.cozy = cozy
 	UpdateLabel()
+end
+
+-- Shows the word and the tooltip again, after the language changed.
+function Gauge:Refresh()
+	UpdateLabel()
+	UpdateTooltip()
+end
+
+-- colder and warmer are lists of words from Model.Reasons. test is true while a test value shows.
+function Gauge:SetReasons(colder, warmer, test)
+	reasons.colder, reasons.warmer, reasons.test = colder, warmer, test or false
+	UpdateTooltip()
 end
 
 function Gauge:SetUnit(unit)

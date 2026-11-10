@@ -16,6 +16,12 @@ local function HotSpring(base, climate)
 	return zone
 end
 
+-- A place with lava that is not volcanic as a whole. Lava burns there in a fight too.
+local function WithLava(zone)
+	zone.lava = true
+	return zone
+end
+
 ns.Zones = {}
 
 ns.Zones.forever = {
@@ -101,5 +107,5 @@ ns.Zones.subzones = {
 	[16513] = Zone(90, "volcanic"), -- Blackrock Mountain
 	[537] = Zone(90, "volcanic"), -- Fire Plume Ridge
 	[246] = Zone(95, "volcanic"), -- The Cauldron
-	[5342] = Zone(45, "none", INSIDE), -- The Great Forge
+	[5342] = WithLava(Zone(45, "none", INSIDE)), -- The Great Forge
 }

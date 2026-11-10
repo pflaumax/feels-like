@@ -109,6 +109,11 @@ local function InstallGlobals(forever)
 	_G.UIParent = Widget()
 	_G.GameTooltip = Widget()
 	_G.GameTooltip.IsOwned = function() return false end
+	-- The tooltip keeps its lines, the title first.
+	_G.GameTooltip.lines = {}
+	_G.GameTooltip.SetOwner = function(self, owner) self.owner, self.lines = owner, {} end
+	_G.GameTooltip.SetText = function(self, text) self.lines[1] = text end
+	_G.GameTooltip.AddLine = function(self, text) self.lines[#self.lines + 1] = text end
 	_G.CreateFrame = function(_, name)
 		local frame = Widget()
 		createdFrames[#createdFrames + 1] = frame
@@ -129,6 +134,7 @@ local function InstallGlobals(forever)
 	_G.UnitResistance = function(_, class) return unpack(world.resist[class] or { 0, 0, 0, 0 }) end
 	_G.IsShiftKeyDown = function() return world.shift end
 	_G.SlashCmdList = {}
+	_G.LibStub = nil -- no panel addon by default
 
 	_G.EventUtil = { ContinueOnAddOnLoaded = function(_, fn) loadedCallback = fn end }
 	_G.C_Timer = {
@@ -142,7 +148,7 @@ local function InstallGlobals(forever)
 		GetBestMapForUnit = function() return world.mapID end,
 		GetMapInfo = function(id) return { parentMapID = parents[id] or 0 } end,
 		GetAreaInfo = function(id)
-			return ({ [439] = "The Shimmering Flats", [537] = "Fire Plume Ridge", [2246] = "Frostfire Hot Springs" })[id]
+			return ({ [439] = "The Shimmering Flats", [537] = "Fire Plume Ridge", [2246] = "Frostfire Hot Springs", [5342] = "The Great Forge" })[id]
 		end,
 	}
 	_G.GetInstanceInfo = function() return unpack(world.instance) end
@@ -170,7 +176,11 @@ local function InstallGlobals(forever)
 		_G.WOW_PROJECT_ID = 18
 		_G.Enum = { WeatherType = { Clear = 0, Rain = 1, Snow = 2, Sandstorm = 3, Miscellaneous = 4 } }
 		_G.C_Weather = { GetCurrentWeather = function() return world.weather end }
-		_G.C_DateAndTime = { IsDayTime = function() return world.hour >= 6 and world.hour < 18 end }
+		_G.C_DateAndTime = {
+			IsDayTime = function() return world.hour >= 6 and world.hour < 18 end,
+			-- The server's calendar. No date by default, so the old readings have no season.
+			GetCurrentCalendarTime = function() return world.date end,
+		}
 	else
 		_G.C_DateAndTime = nil
 		_G.WOW_PROJECT_CAMELOT = nil
@@ -470,20 +480,46 @@ settings.FEELSLIKE_LABEL.callback(nil, "hover")
 check("label back to hover", label.shown == false and FeelsLikeDB.label == "hover")
 
 -- Moving needs Shift and an unlocked gauge.
+-- The move starts at the press, not after the drag threshold.
+local function Press(button)
+	gauge.scripts.OnMouseDown(gauge, button or "LeftButton")
+end
+-- Lets go of the mouse, at a new place when dx is given.
+local function Release(dx)
+	local realCenter = gauge.GetCenter
+	if dx then
+		gauge.GetCenter = function() return 500 + dx, 300 end
+	end
+	gauge.scripts.OnMouseUp(gauge, "LeftButton")
+	gauge.GetCenter = realCenter
+end
 gauge.moving = false
 world.shift = false
-gauge.scripts.OnDragStart(gauge)
+Press()
 check("no move without shift", not gauge.moving)
-world.shift = true
+Release(40)
+check("no shift, nothing saved", FeelsLikeDB.x == nil)
+printed = {}
 gauge.scripts.OnDragStart(gauge)
-check("shift drag moves", gauge.moving)
-gauge.scripts.OnDragStop(gauge)
+check("a drag without shift says how to move", #printed == 1 and printed[1]:find("hold Shift and drag", 1, true), printed[1])
+gauge.scripts.OnDragStart(gauge)
+check("the hint comes once", #printed == 1, #printed)
+world.shift = true
+Press("RightButton")
+check("the right button does not move", not gauge.moving)
+Press()
+check("shift press moves at once", gauge.moving)
+Release()
+check("a press without a move saves nothing", FeelsLikeDB.x == nil and gauge.point[2] == _G.Minimap)
+gauge.moving = false
+Press()
+Release(40)
 check("drag saves position", FeelsLikeDB.x ~= nil and gauge.point[2] == _G.UIParent)
 ns.Gauge:ResetPosition()
 check("reset back to minimap", FeelsLikeDB.x == nil and gauge.point[2] == _G.Minimap)
 gauge.moving = false
 ns.Gauge:SetLocked(true)
-gauge.scripts.OnDragStart(gauge)
+Press()
 check("locked does not move", not gauge.moving)
 world.shift = false
 check("mouse on while label shows on hover", gauge.mouse == true)
@@ -500,9 +536,39 @@ check("mouse back on", gauge.mouse == true)
 
 -- A plain drag saves nothing.
 world.shift = false
-gauge.scripts.OnDragStart(gauge)
-gauge.scripts.OnDragStop(gauge)
+Press()
+Release(40)
 check("plain drag saves nothing", FeelsLikeDB.x == nil and gauge.point[2] == _G.Minimap)
+
+-- The tooltip says the word, the reasons and how to move the gauge.
+local function TooltipText()
+	return table.concat(GameTooltip.lines, " | ")
+end
+local before = { world.mapID, world.zoneText, world.hour, world.weather }
+world.mapID, world.zoneText, world.hour = 1426, "Dun Morogh", 5
+world.weather = { type = 2, intensity = 1 }
+Tick(2)
+gauge.scripts.OnEnter()
+check("tooltip shown on hover", GameTooltip.shown == true and GameTooltip.owner == gauge)
+check("tooltip names the word and the reasons",
+	TooltipText() == "Freezing | Colder: a cold place, snow, the night | Shift-drag to move", TooltipText())
+GameTooltip.lines = {}
+Tick(1)
+check("an open tooltip with nothing new is left alone", #GameTooltip.lines == 0, #GameTooltip.lines)
+world.weather = { type = 0, intensity = 0 }
+Tick(1)
+check("tooltip follows the reading while it is open",
+	TooltipText() == "Freezing | Colder: a cold place, the night | Shift-drag to move", TooltipText())
+Slash("test 50")
+Tick(1)
+check("tooltip says a test runs", TooltipText():find("Hot | A test value", 1, true), TooltipText())
+Slash("test off")
+gauge.scripts.OnLeave()
+check("tooltip hidden off the gauge", GameTooltip.shown == false)
+GameTooltip.lines = {}
+Tick(1)
+check("no tooltip work while the mouse is away", #GameTooltip.lines == 0)
+world.mapID, world.zoneText, world.hour, world.weather = before[1], before[2], before[3], before[4]
 
 -- Hover state does not stick when the mouse is off.
 gauge.scripts.OnEnter()
@@ -1240,6 +1306,34 @@ Tick(2)
 check("a fight that starts in lava keeps burning", Gauge.target == 100, Gauge.target)
 world.combat, world.swimming = false, false
 Tick(10)
+-- Seasons and holidays follow the server's calendar.
+world.mapID, world.zoneText, world.hour = 1429, "Elwynn Forest", 15
+world.date = { month = 4, monthDay = 10 }
+Tick(1)
+check("spring has no season step", Gauge.target == 15 and Slash("debug"):find("season none (month 4, day 10): +0.0", 1, true), Gauge.target)
+world.date = { month = 12, monthDay = 24 }
+Tick(1)
+check("winter veil is colder", Gauge.target == 7, Gauge.target)
+check("debug names the holiday", Slash("debug"):find("season Winter Veil (month 12, day 24): -8.0", 1, true))
+world.date = { month = 7, monthDay = 20 }
+Tick(1)
+check("summer is warmer", Gauge.target == 20, Gauge.target)
+world.date = nil
+Tick(1)
+check("no calendar, no season", Gauge.target == 15 and Slash("debug"):find("season none (no calendar): +0.0", 1, true), Gauge.target)
+world.hour = 3
+-- The Great Forge has lava, though Ironforge is not volcanic.
+world.mapID, world.zoneText, world.subzoneText = 1455, "Ironforge", "The Great Forge"
+Tick(1)
+check("the great forge reading", Gauge.target == 45, Gauge.target)
+world.combat, world.swimming = true, true
+FireHit()
+Tick(2)
+FireHit()
+check("lava in the great forge burns in a fight", Gauge.target == 100, Gauge.target)
+world.combat, world.swimming = false, false
+world.subzoneText = ""
+Tick(10)
 -- Away from hot ground a fire DoT in a lake is a spell at any beat, and the lake soaks.
 world.mapID, world.zoneText = 1426, "Dun Morogh"
 Tick(1)
@@ -1260,6 +1354,31 @@ CoreEvent("UNIT_COMBAT", "player", "HEAL", "", 120, 4)
 CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 0, 4)
 NextFrame()
 check("heal and zero ignored", Gauge.target == coldReading, Gauge.target)
+-- A frost spell chills for a moment, in a fight or out of it.
+world.mapID, world.zoneText, world.hour = 1429, "Elwynn Forest", 15
+Tick(1)
+local mildReading = Gauge.target
+check("elwynn afternoon", mildReading == 15, mildReading)
+CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 120, 16)
+check("a frost spell chills at once", Gauge.target == -85, Gauge.target)
+check("debug shows the frost spell", Slash("debug"):find("frost spell 1.00: -100.0", 1, true))
+Tick(1)
+check("a frost spell holds a moment", Gauge.target == -85, Gauge.target)
+Tick(2)
+check("a frost spell fades", Gauge.target > -85 and Gauge.target < mildReading, Gauge.target)
+Tick(2)
+check("a frost spell faded", Gauge.target == mildReading, Gauge.target)
+world.combat = true
+CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 120, 16)
+check("a frost spell chills in a fight too", Gauge.target == -85, Gauge.target)
+world.combat = false
+Tick(10)
+CoreEvent("UNIT_COMBAT", "player", "HEAL", "", 120, 16)
+CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 0, 16)
+check("a frost heal or a miss chills nothing", Gauge.target == mildReading, Gauge.target)
+world.mapID, world.zoneText, world.hour = 1426, "Dun Morogh", 3
+Tick(1)
+check("back in dun morogh", math.abs(Gauge.target - coldReading) < 0.01, Gauge.target)
 FireHit(20) -- frostfire
 check("mixed school with fire counts", Gauge.target == 100, Gauge.target)
 Tick(20)
@@ -1547,6 +1666,153 @@ Tick(61)
 check("undead share the cozy lines", #chatLines == 3 and LastLine() == "The warmth of the inn wraps around you.", LastLine())
 world.indoors, world.resting = false, false
 world.race, world.raceName = "Human", "Human"
+
+-- Soaked clothes, rain, a torch and a drink have lines too.
+LoadQuietly()
+GoMild()
+world.hour = 15
+Tick(2)
+world.swimming = true
+Tick(3)
+world.swimming = false
+Tick(5)
+check("soaked line", #chatLines == 1 and LastLine() == "Your wet clothes cling to you.", LastLine())
+check("debug names the soaked line", Slash("debug"):find("last: Soaked", 1, true))
+Tick(200)
+world.weather = { type = 1, intensity = 1 }
+Tick(5)
+check("rain line on a mild day", #chatLines == 2 and LastLine() == "Rain runs down your neck.", LastLine())
+world.weather = { type = 0, intensity = 0 }
+world.hour = 5
+Tick(200)
+world.hands[16] = 6182
+Tick(1)
+check("a torch lit in the cold has a line", #chatLines == 3 and LastLine() == "The torch warms your hand.", LastLine())
+Tick(5)
+check("the torch line comes once", #chatLines == 3, #chatLines)
+world.hands = {}
+Tick(61)
+CoreEvent("CHAT_MSG_SYSTEM", "You feel tipsy. Whee!")
+check("a drink in the cold has a line", #chatLines == 4 and LastLine() == "The drink warms you from the inside.", LastLine())
+Tick(700)
+CoreEvent("CHAT_MSG_SYSTEM", "You feel tipsy. Whee!")
+check("the same drink level says nothing", #chatLines == 4, #chatLines)
+world.hour = 15
+Tick(1)
+CoreEvent("CHAT_MSG_SYSTEM", "You feel drunk.  Woah!")
+check("a drink on a warm day says nothing", #chatLines == 4, #chatLines)
+CoreEvent("CHAT_MSG_SYSTEM", "You feel sober again.")
+-- Fur has its own lines for the cold and the heat.
+LoadQuietly()
+world.race, world.raceName = "Tauren", "Tauren"
+GoMild()
+Tick(2)
+GoFreezing()
+world.hour = 5
+Tick(4)
+check("fur line in the cold", #chatLines == 1 and LastLine() == "Your fur bristles in the cold.", LastLine())
+world.race, world.raceName = "Human", "Human"
+
+-- A panel addon like Titan Panel brings LibDataBroker: the word goes there too.
+ns, settings = LoadAddon(true)
+check("no panel feed without a panel addon", Slash("debug"):find("panel feed: off, no panel addon with LibDataBroker-1.1", 1, true))
+local dataObjects = {}
+_G.LibStub = {
+	GetLibrary = function(_, name, silent)
+		return name == "LibDataBroker-1.1" and silent and {
+			NewDataObject = function(_, objectName, object)
+				dataObjects[objectName] = object
+				return object
+			end,
+		} or nil
+	end,
+}
+CoreEvent("PLAYER_ENTERING_WORLD", true, false) -- the panel loaded after this addon
+local feed = dataObjects["Feels Like"]
+check("panel feed registered", feed ~= nil and feed.type == "data source" and feed.icon == "Interface\\AddOns\\FeelsLike\\Media\\Icon")
+check("debug says the panel feed is on", Slash("debug"):find("panel feed: on (LibDataBroker-1.1)", 1, true))
+check("panel feed shows the colored word", feed and feed.text == "|cff6e9bffFreezing|r", feed and feed.text)
+GoMild()
+world.hour = 15
+Tick(1)
+check("panel feed follows the reading", feed and feed.text == "|cffc8d3dcMild|r", feed and feed.text)
+Slash("test -90")
+check("panel feed keeps the real reading in a test", feed and feed.text == "|cffc8d3dcMild|r", feed and feed.text)
+Slash("test off")
+local panelLines = {}
+feed.OnTooltipShow({ AddLine = function(_, text) panelLines[#panelLines + 1] = text end })
+check("panel tooltip", table.concat(panelLines, " | ") == "Feels Like | Mild | Warmer: the sun, a warm place | Click to open the settings",
+	table.concat(panelLines, " | "))
+settings.opened = nil
+feed.OnClick()
+check("a click on the panel feed opens the settings", settings.opened == 7, settings.opened)
+CoreEvent("PLAYER_ENTERING_WORLD", false, false)
+check("the feed registers once", dataObjects["Feels Like"] == feed)
+_G.LibStub = nil
+
+-- Ukrainian: the word, the tooltip, the lines in chat, the hints and the settings.
+ns, settings = LoadAddon(true, { language = "uk", label = "always" })
+check("language setting registered", settings.FEELSLIKE_LANGUAGE ~= nil and settings.FEELSLIKE_SEASONS ~= nil)
+Tick(10)
+check("ukrainian word next to the gauge", fontStrings.GameFontHighlightSmall.text == "Морозно", fontStrings.GameFontHighlightSmall.text)
+local ukGauge = _G.FeelsLikeGauge
+ukGauge.scripts.OnEnter()
+check("ukrainian tooltip", table.concat(GameTooltip.lines, " | ")
+	== "Морозно | Холодніше: холодне місце, сніг, ніч | Shift + перетягування, щоб пересунути", table.concat(GameTooltip.lines, " | "))
+ukGauge.scripts.OnLeave()
+GoMild()
+Tick(2)
+GoFreezing()
+Tick(4)
+check("ukrainian line in chat", #chatLines == 1 and LastLine() == "Ти тремтиш від холоду. (/shiver)", LastLine())
+printed = {}
+ukGauge.scripts.OnDragStart(ukGauge)
+check("ukrainian hint about Shift", printed[1] and printed[1]:find("затисни Shift і тягни", 1, true), printed[1])
+world.combat = true
+check("ukrainian combat note", Slash(""):find("налаштування відкриються після бою", 1, true))
+world.combat = false
+check("debug stays english", Slash("debug"):find("felt -88.0, target -88.0: Freezing", 1, true))
+local apiValue, apiWord = FeelsLike.GetTemperature()
+check("the api word stays english", apiWord == "Freezing", apiWord)
+-- Back to English at once, from the settings.
+printed = {}
+settings.FEELSLIKE_LANGUAGE.callback(nil, "en")
+check("english word at once", fontStrings.GameFontHighlightSmall.text == "Freezing", fontStrings.GameFontHighlightSmall.text)
+check("the settings page needs a reload", printed[1] and printed[1]:find("type /reload to change the settings page too", 1, true), printed[1])
+settings.FEELSLIKE_LANGUAGE.callback(nil, "uk")
+check("ukrainian word at once", fontStrings.GameFontHighlightSmall.text == "Морозно", fontStrings.GameFontHighlightSmall.text)
+-- The panel feed speaks Ukrainian too.
+local ukObjects = {}
+_G.LibStub = { GetLibrary = function() return { NewDataObject = function(_, name, object) ukObjects[name] = object return object end } end }
+CoreEvent("PLAYER_ENTERING_WORLD", false, true)
+local ukLines = {}
+ukObjects["Feels Like"].OnTooltipShow({ AddLine = function(_, text) ukLines[#ukLines + 1] = text end })
+check("ukrainian panel feed", ukObjects["Feels Like"].text == "|cff6e9bffМорозно|r"
+	and table.concat(ukLines, " | ") == "Feels Like | Морозно | Холодніше: холодне місце, сніг, ніч | Клацни, щоб відкрити налаштування",
+	table.concat(ukLines, " | "))
+_G.LibStub = nil
+local missing = {}
+for text in pairs(ns.Locale.missing) do
+	missing[#missing + 1] = text
+end
+check("every text shown has a ukrainian one", #missing == 0, table.concat(missing, " / "))
+ns = LoadAddon(true, { language = "klingon" })
+check("an unknown saved language is english", FeelsLikeDB.language == "en", FeelsLikeDB.language)
+
+-- Seasons and holidays can be turned off.
+ns = LoadAddon(true)
+check("seasons on by default", FeelsLikeDB.seasons == true)
+world.mapID, world.zoneText, world.hour = 1429, "Elwynn Forest", 15
+world.weather = { type = 0, intensity = 0 }
+world.date = { month = 12, monthDay = 24 }
+Tick(1)
+check("winter veil counts by default", ns.Gauge.target == 7, ns.Gauge.target)
+FeelsLikeDB.seasons = false
+Tick(1)
+check("no season with the setting off", ns.Gauge.target == 15, ns.Gauge.target)
+check("debug says seasons are off", Slash("debug"):find("season none (off in settings): +0.0", 1, true))
+FeelsLikeDB.seasons = true
+world.date = nil
 
 -- Dead: the same cold everywhere until you are back.
 ns = LoadAddon(true)

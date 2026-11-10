@@ -120,6 +120,27 @@ Model.WEATHER_DELTA = {
 	sandstorm = 10,
 }
 
+-- Seasons and holidays by the server's calendar: a small step on the air of places under the sky.
+local SEASON_STEP = 5
+local HOLIDAY_STEP = 8
+local SEASONAL = { desert = true, arid = true, temperate = true, snow = true, tropical = true }
+
+-- Returns the step and the name of the season or the holiday, or 0 and nil.
+function Model.Season(month, day)
+	if not month or not day then
+		return 0, nil
+	elseif (month == 12 and day >= 16) or (month == 1 and day <= 2) then
+		return -HOLIDAY_STEP, "Winter Veil"
+	elseif (month == 6 and day >= 21) or (month == 7 and day <= 5) then
+		return HOLIDAY_STEP, "Midsummer"
+	elseif month == 12 or month <= 2 then
+		return -SEASON_STEP, "winter"
+	elseif month >= 6 and month <= 8 then
+		return SEASON_STEP, "summer"
+	end
+	return 0, nil
+end
+
 -- Humid air feels hotter: above the start it adds a share of the heat over it.
 local HUMID = { tropical = true }
 local HUMID_START = 20
@@ -133,6 +154,9 @@ local COLDEST_HOUR = 5
 -- Shelter pulls the reading toward room temperature. The factor is how much outside air gets in.
 local INDOOR_ROOM = 15
 local INDOOR_FACTOR = 0.4
+-- In the snow a cave or an unheated house is only a windbreak: colder inside, and more of the cold gets in.
+local SNOW_INDOOR_ROOM = 0
+local SNOW_INDOOR_FACTOR = 0.6
 local INN_ROOM = 22
 local INN_FACTOR = 0.1
 
@@ -169,6 +193,11 @@ local BURN_FADE = 4 -- seconds to fade back to normal
 local FIRE_SPELL_HOLD = 1
 local FIRE_SPELL_FADE = 3
 
+-- A frost spell chills any body for a moment, toward this. Freezing, with the icy ring.
+local FROST_FEEL = -85
+local FROST_SPELL_HOLD = 1
+local FROST_SPELL_FADE = 3
+
 -- A drink warms a cold body: tipsy, drunk, completely smashed.
 local DRINK_WARMTH = { 10, 20, 30 }
 
@@ -204,6 +233,11 @@ end
 -- 1 right after a fire spell hit, then fades to 0.
 function Model.FireSpellBurning(secondsSinceHit)
 	return Fade(secondsSinceHit, FIRE_SPELL_HOLD, FIRE_SPELL_FADE)
+end
+
+-- 1 right after a frost spell hit, then fades to 0.
+function Model.FrostSpellChill(secondsSinceHit)
+	return Fade(secondsSinceHit, FROST_SPELL_HOLD, FROST_SPELL_FADE)
 end
 
 -- 1 near the spot by the fire, then fades to 0 when you walk away.
@@ -292,6 +326,9 @@ local function Shelter(state)
 	elseif InInn(state) then
 		return INN_ROOM, INN_FACTOR
 	elseif state.indoors then
+		if state.climate == "snow" then
+			return SNOW_INDOOR_ROOM, SNOW_INDOOR_FACTOR
+		end
 		return INDOOR_ROOM, INDOOR_FACTOR
 	end
 	return 0, 1
@@ -304,7 +341,12 @@ function Model.Compute(state, wetness)
 	-- No weather in places that are fully inside.
 	local weather = not state.inside and state.weather
 	r.weather = weather and (Model.WEATHER_DELTA[weather] or 0) * state.weatherIntensity or 0
-	local air = state.base + r.dayNight + r.weather
+	-- No season in places that are fully inside or that have no sky of their own.
+	r.season, r.seasonName = 0, nil
+	if SEASONAL[state.climate] and not state.inside and not state.seasonsOff then
+		r.season, r.seasonName = Model.Season(state.month, state.day)
+	end
+	local air = state.base + r.dayNight + r.weather + r.season
 	r.humid = HUMID[state.climate] and math.max(0, air - HUMID_START) * HUMID_SHARE or 0
 	r.env = air + r.humid
 
@@ -343,14 +385,17 @@ function Model.Compute(state, wetness)
 	-- A drink warms only a cold body, and never past the middle of Mild.
 	r.drink = math.min(DRINK_WARMTH[state.drunk] or 0, math.max(0, -scaled))
 	-- Fire underfoot pulls the reading toward hot. Fire spells in a fight burn only a body that feels them.
-	local beforeBurn = math.min(scaled + r.drink, AIR_CEILING)
+	local beforeFrost = math.min(scaled + r.drink, AIR_CEILING)
+	-- A frost spell pulls the reading toward the cold for a moment, the same for every body.
+	r.frost = math.min(0, (FROST_FEEL - beforeFrost) * (state.frostSpell or 0))
+	local beforeBurn = beforeFrost + r.frost
 	local fireSpell = state.body and state.body.fireSpells and state.fireSpell or 0
 	r.burning = math.max(state.burning or 0, fireSpell)
 	r.burn = math.max(0, (Model.MAX - beforeBurn) * r.burning)
 	r.felt = beforeBurn + r.burn
 	r.target = Model.Clamp(r.felt)
 	-- Held at the air ceiling, for /feels debug. Not while fire lifts the reading over it.
-	r.capped = scaled + r.drink > AIR_CEILING and r.burn == 0
+	r.capped = scaled + r.drink > AIR_CEILING and r.burn == 0 and r.frost == 0
 
 	-- A ghost or a wisp feels nothing of the place.
 	if state.dead then
@@ -390,4 +435,60 @@ function Model.UpdateWetness(wetness, dt, state, dryTemperature)
 		dryTime = COLD_DRY_TIME
 	end
 	return math.max(floor, wetness - dt / dryTime)
+end
+
+-- A step smaller than this is not worth a word in the tooltip.
+local REASON_MIN = 3
+-- The tooltip names this many reasons on each side.
+local REASON_COUNT = 3
+-- A place past this base is cold or hot, a place inside it only cool or warm.
+local STRONG_PLACE = 34
+
+local function PlaceWord(base)
+	if base < 0 then
+		return base <= -STRONG_PLACE and "a cold place" or "a cool place"
+	end
+	return base >= STRONG_PLACE and "a hot place" or "a warm place"
+end
+
+-- Every word Model.Reasons can give, without the body words that Core adds, for the language tests.
+Model.REASON_WORDS = {
+	"a cold place", "a cool place", "a warm place", "a hot place", "the night", "the sun", "rain", "snow",
+	"a sandstorm", "the weather", "winter", "summer", "Winter Veil", "Midsummer", "the season", "humid air",
+	"the inn", "a roof", "a campfire", "a torch", "the water", "wet clothes", "your body", "a drink",
+	"a frost spell", "fire", "death",
+}
+
+-- What makes the reading colder and what makes it warmer right now, strongest first, in plain words.
+-- Returns two lists for the tooltip. state.bodyWord names the body, like "your fur".
+function Model.Reasons(state, r)
+	if state.dead then
+		return { "death" }, {}
+	end
+	local steps = {
+		{ state.base, PlaceWord(state.base) },
+		{ r.dayNight, r.dayNight < 0 and "the night" or "the sun" },
+		{ r.weather, state.weather == "sandstorm" and "a sandstorm" or state.weather or "the weather" },
+		{ r.season, r.seasonName or "the season" },
+		{ r.humid, "humid air" },
+		{ r.sheltered - r.env, r.inn and "the inn" or "a roof" },
+		{ r.campfire, "a campfire" },
+		{ r.torch, "a torch" },
+		{ r.wet, state.swimming and "the water" or "wet clothes" },
+		{ r.race, state.bodyWord or "your body" },
+		{ r.drink, "a drink" },
+		{ r.frost, "a frost spell" },
+		{ r.burn, "fire" },
+	}
+	table.sort(steps, function(a, b)
+		return math.abs(a[1]) > math.abs(b[1])
+	end)
+	local colder, warmer = {}, {}
+	for _, step in ipairs(steps) do
+		local list = step[1] < 0 and colder or warmer
+		if math.abs(step[1]) >= REASON_MIN and #list < REASON_COUNT then
+			list[#list + 1] = step[2]
+		end
+	end
+	return colder, warmer
 end

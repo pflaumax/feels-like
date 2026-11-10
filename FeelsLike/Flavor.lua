@@ -50,8 +50,34 @@ local LINES = {
 		"You feel warm and cozy.",
 		"It is good to be inside.",
 	},
+	soaked = {
+		"Your wet clothes cling to you.",
+		"Water drips from your clothes.",
+		"You are soaked to the skin.",
+	},
+	rain = {
+		"Rain runs down your neck.",
+		"The rain drums on your shoulders.",
+		"You pull your collar up against the rain.",
+	},
+	snow = {
+		"Snowflakes melt on your face.",
+		"Snow settles on your shoulders.",
+		"The snow crunches under your feet.",
+	},
+	-- Said once when it happens, not while it lasts.
+	drink = {
+		"The drink warms you from the inside.",
+		"A pleasant warmth spreads through you.",
+		"The cold seems a little further away.",
+	},
+	torch = {
+		"The torch warms your hand.",
+		"The flame pushes the cold back a little.",
+		"You hold the torch a bit closer.",
+	},
 }
--- The undead do not breathe, sweat or shiver, so the weather lines are their own. The rest are shared.
+-- The undead do not breathe, sweat or shiver, so the lines for the cold and the heat are their own. The rest are shared.
 local UNDEAD_LINES = {
 	Freezing = {
 		"The frost stiffens your dead joints.",
@@ -74,11 +100,42 @@ local UNDEAD_LINES = {
 		"You feel like you are in an oven.",
 	},
 }
+-- A body with fur has its own weather lines too.
+local FUR_LINES = {
+	Freezing = {
+		"The cold gets even through your fur.",
+		"Frost gathers in your fur.",
+		"You shake the ice from your coat.",
+	},
+	Cold = {
+		"Your fur bristles in the cold.",
+		"Your thick coat keeps the worst of the chill out.",
+		"A chill runs under your fur.",
+	},
+	Hot = {
+		"Your fur is far too warm for this.",
+		"You pant in the heat.",
+		"You look for a bit of shade.",
+	},
+	Scorching = {
+		"Your thick fur is unbearable in this heat.",
+		"The heat is unbearable.",
+		"You feel like you are in an oven.",
+	},
+}
+local KIND_LINES = { undead = UNDEAD_LINES, fur = FUR_LINES }
 local NAMES = {
 	burning = "Scorching from fire underfoot",
 	cozyFire = "Cozy by a fire",
 	cozyInn = "Cozy in an inn",
+	soaked = "Soaked",
+	rain = "Rain",
+	snow = "Snow",
+	drink = "A drink",
+	torch = "A torch",
 }
+-- Weather that has lines of its own, when the word has none.
+local WEATHER_LINES = { rain = true, snow = true }
 
 local current, since -- the lines that fit the reading, and since when
 local done -- this time has spoken, or stays quiet
@@ -87,15 +144,19 @@ local spokenAt = {}
 local lastKey, lastLineAt
 local turn = {}
 
--- Which lines fit the reading, or nil.
-local function LinesFor(result)
+-- Which lines fit the reading, or nil. Fire and Cozy first, then soaked clothes, then the word, then the weather.
+local function LinesFor(result, scene)
 	local word = ns.Model.Band(result.target, result.cozy).word
 	if word == "Scorching" and result.burning > 0 then
 		return "burning"
 	elseif word == "Cozy" then
 		return result.inn and "cozyInn" or "cozyFire"
+	elseif scene.soaked then
+		return "soaked"
+	elseif LINES[word] then
+		return word
 	end
-	return LINES[word] and word
+	return WEATHER_LINES[scene.weather] and scene.weather or nil
 end
 
 local function Say(text)
@@ -103,15 +164,28 @@ local function Say(text)
 	DEFAULT_CHAT_FRAME:AddMessage(text, color.r, color.g, color.b)
 end
 
+-- Says the next line of a set. kind picks the lines of a body, where it has its own.
+local function Speak(key, now, kind)
+	spokenAt[key], lastKey, lastLineAt = now, key, now
+	local lines = KIND_LINES[kind] and KIND_LINES[kind][key] or LINES[key]
+	local index = (turn[key] or 0) % #lines + 1
+	turn[key] = index
+	Say(ns.T(lines[index]))
+end
+
 -- Starts the quiet moment after login or a /reload.
 function Flavor.OnLogin(now)
 	quietUntil = now + LOGIN_QUIET
 end
 
+local NO_SCENE = {}
+
 -- Called after every reading. held keeps the line for later (combat, a test, a ghost); off drops it.
--- undead picks the lines of a body that does not breathe.
-function Flavor.OnReading(result, now, held, off, undead)
-	local key = LinesFor(result)
+-- scene: kind is "undead" or "fur" for a body with its own lines, soaked is true in wet clothes out of the
+-- water, weather is the weather that falls on you.
+function Flavor.OnReading(result, now, held, off, scene)
+	scene = scene or NO_SCENE
+	local key = LinesFor(result, scene)
 	quietUntil = quietUntil or now + LOGIN_QUIET
 	if key ~= current then
 		current, since, done = key, now, false
@@ -131,12 +205,24 @@ function Flavor.OnReading(result, now, held, off, undead)
 		return -- speaks later, if the word still holds
 	end
 	done = true
-	spokenAt[key], lastKey, lastLineAt = now, key, now
-	local lines = undead and UNDEAD_LINES[key] or LINES[key]
-	local index = (turn[key] or 0) % #lines + 1
-	turn[key] = index
-	Say(lines[index])
+	Speak(key, now, scene.kind)
 end
+
+-- Something that happens once, like a drink or a torch you light. It speaks now or not at all.
+function Flavor.OnEvent(key, now, held, off, kind)
+	quietUntil = quietUntil or now + LOGIN_QUIET
+	if off or held or now < quietUntil then
+		return
+	elseif spokenAt[key] and now - spokenAt[key] < WORD_COOLDOWN then
+		return
+	elseif lastLineAt and now - lastLineAt < LINE_COOLDOWN then
+		return
+	end
+	Speak(key, now, kind)
+end
+
+-- Every line, for the language tests.
+Flavor.SETS = { LINES, UNDEAD_LINES, FUR_LINES }
 
 -- For /feels debug.
 function Flavor.Describe(now, on)

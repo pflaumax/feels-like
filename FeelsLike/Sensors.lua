@@ -69,6 +69,7 @@ if Enum and Enum.WeatherType then
 end
 
 local FIRE_MASK = Enum and Enum.Damageclass and Enum.Damageclass.MaskFire or 4
+local FROST_MASK = Enum and Enum.Damageclass and Enum.Damageclass.MaskFrost or 16
 
 local subzonesByName
 -- Campfire state. You count as near while the aura keeps renewing and you stay close to where you stood.
@@ -99,12 +100,13 @@ local COMBAT_GRACE = 15 -- seconds
 local lastCombatEnd
 local lastFireHit
 local lastFireSpellHit
+local lastFrostHit
 -- Lava hits a swimmer on a steady beat, also in a fight. One fire hit in the water is still a spell.
--- A fire DoT in a lake has the same beat, so in a fight only a place with hot ground has lava.
+-- A fire DoT in a lake has the same beat, so in a fight only a place with hot ground or marked lava has lava.
 local LAVA_BEAT = 2.5 -- seconds between two hits that still count as lava
 local LAVA_MIN_BEAT = 0.5 -- hits closer than this are one spell that hit twice
 local lastSwimFireHit
-local lavaPlace = false -- the place of the last reading has hot ground
+local lavaPlace = false -- the place of the last reading has hot ground or lava
 -- The last fire hit of any kind and the gap before it, for /feels debug.
 local lastAnyFireHit
 local lastFireGap
@@ -189,6 +191,19 @@ local function IsSecret(value)
 	return issecretvalue ~= nil and issecretvalue(value)
 end
 Sensors.IsSecret = IsSecret
+
+-- The month and the day of the server's calendar, or the computer's when the game has none. Nil without both.
+local function ReadDate()
+	local calendar = C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime and C_DateAndTime.GetCurrentCalendarTime()
+	if calendar and not IsSecret(calendar) and calendar.month and calendar.monthDay then
+		return calendar.month, calendar.monthDay
+	end
+	local today = date and date("*t")
+	if today then
+		return today.month, today.day
+	end
+	return nil
+end
 
 local function IsSecretAura(aura)
 	return IsSecret(aura) or (aura ~= nil and (IsSecret(aura.duration) or IsSecret(aura.expirationTime)
@@ -455,6 +470,21 @@ function Sensors.IsFireHit(action, amount, schoolMask)
 	return action == "WOUND" and amount ~= nil and amount > 0 and bit.band(schoolMask or 0, FIRE_MASK) ~= 0
 end
 
+-- True for frost damage to the player. A spell of frost and fire counts as fire.
+function Sensors.IsFrostHit(action, amount, schoolMask)
+	if IsSecret(action) or IsSecret(amount) or IsSecret(schoolMask) then
+		return false
+	end
+	local mask = schoolMask or 0
+	return action == "WOUND" and amount ~= nil and amount > 0 and bit.band(mask, FROST_MASK) ~= 0
+		and bit.band(mask, FIRE_MASK) == 0
+end
+
+-- A frost spell chills for a moment, in a fight or out of it.
+function Sensors.OnFrostHit()
+	lastFrostHit = GetTime()
+end
+
 -- Checked one frame after the hit. In a fight or just after it, the hit is a fire spell: returns true.
 -- A second hit on the lava beat while you swim on hot ground is lava, also in a fight.
 function Sensors.OnFireHit()
@@ -559,10 +589,11 @@ function Sensors.Read()
 	state.climate = state.place.climate
 	state.inside = state.place.inside == true
 	state.hotWater = state.place.hotWater == true
-	lavaPlace = ns.Model.HasGroundHeat(state.climate)
+	lavaPlace = ns.Model.HasGroundHeat(state.climate) or state.place.lava == true
 
 	local hour, minute = GetGameTime()
 	state.hour = hour + minute / 60
+	state.month, state.day = ReadDate()
 	-- Forever's own day and night indicator, for /feels debug.
 	if C_DateAndTime and C_DateAndTime.IsDayTime then
 		state.gameSaysDay = C_DateAndTime.IsDayTime()
@@ -605,5 +636,6 @@ function Sensors.Read()
 	state.fireGap = lastAnyFireHit and GetTime() - lastAnyFireHit <= FIRE_GAP_SHOWN and lastFireGap or nil
 	state.burning = ns.Model.Burning(lastFireHit and GetTime() - lastFireHit, state.swimming)
 	state.fireSpell = ns.Model.FireSpellBurning(lastFireSpellHit and GetTime() - lastFireSpellHit)
+	state.frostSpell = ns.Model.FrostSpellChill(lastFrostHit and GetTime() - lastFrostHit)
 	return state
 end

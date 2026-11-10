@@ -91,6 +91,24 @@ near("unknown climate flat", Model.DayNight(5, "nope"), 0)
 check("mild zone night word", Model.Band(10 + Model.DayNight(5, "temperate")).word, "Mild")
 check("mild zone night segment", Model.SegmentIndex(10 + Model.DayNight(5, "temperate")), 5)
 
+-- Seasons and holidays
+local function season(month, day)
+	local step, name = Model.Season(month, day)
+	return step .. " " .. tostring(name)
+end
+check("no calendar, no season", season(nil, nil), "0 nil")
+check("spring has no step", season(4, 10), "0 nil")
+check("autumn has no step", season(11, 10), "0 nil")
+check("winter", season(1, 20), "-5 winter")
+check("early december is winter", season(12, 15), "-5 winter")
+check("winter veil starts", season(12, 16), "-8 Winter Veil")
+check("winter veil over the new year", season(1, 2), "-8 Winter Veil")
+check("winter veil is over", season(1, 3), "-5 winter")
+check("summer", season(8, 1), "5 summer")
+check("midsummer starts", season(6, 21), "8 Midsummer")
+check("midsummer ends", season(7, 5), "8 Midsummer")
+check("midsummer is over", season(7, 6), "5 summer")
+
 -- Compute
 local base = { base = 0, climate = "none", hour = 0, weather = nil, weatherIntensity = 0 }
 local function state(fields)
@@ -99,6 +117,17 @@ local function state(fields)
 	for k, v in pairs(fields) do s[k] = v end
 	return s
 end
+-- The season moves the air of places under the sky.
+near("winter in elwynn", Model.Compute(state({ base = 5, climate = "temperate", hour = 15, month = 1, day = 20 }), 0).target, 10)
+near("winter veil in elwynn", Model.Compute(state({ base = 5, climate = "temperate", hour = 15, month = 12, day = 24 }), 0).target, 7)
+near("midsummer in tanaris stays below fire", Model.Compute(state({ base = 55, climate = "desert", hour = 15, month = 6, day = 25 }), 0).target, 95)
+near("summer night in tanaris", Model.Compute(state({ base = 55, climate = "desert", hour = 5, month = 8, day = 1 }), 0).target, 10)
+near("no season in a volcanic place", Model.Compute(state({ base = 85, climate = "volcanic", month = 1, day = 20 }), 0).season, 0)
+near("no season in a place with no sky", Model.Compute(state({ base = -30, climate = "none", month = 1, day = 20 }), 0).season, 0)
+near("no season in ironforge", Model.Compute(state({ base = 25, climate = "temperate", inside = true, month = 1, day = 20 }), 0).season, 0)
+near("no season with the setting off", Model.Compute(state({ base = 5, climate = "temperate", month = 1, day = 20, seasonsOff = true }), 0).season, 0)
+near("no season without a calendar", Model.Compute(state({ base = 5, climate = "temperate" }), 0).season, 0)
+check("the season has a name", Model.Compute(state({ base = 5, climate = "temperate", month = 12, day = 24 }), 0).seasonName, "Winter Veil")
 -- Shelter
 near("indoors in the heat is cooler", Model.Compute(state({ base = 75, indoors = true }), 0).target, 39)
 near("indoors on a mild day is the same", Model.Compute(state({ base = 15, indoors = true }), 0).target, 15)
@@ -122,6 +151,12 @@ check("an unknown climate has no hot ground", Model.HasGroundHeat(nil), false)
 check("ground heat is reported under a roof", Model.Compute(state({ base = 85, climate = "volcanic", indoors = true }), 0).groundHeat, true)
 check("no ground heat report outdoors", Model.Compute(state({ base = 85, climate = "volcanic" }), 0).groundHeat, false)
 check("no ground heat report in a volcanic instance", Model.Compute(state({ base = 85, climate = "volcanic", indoors = true, inInstance = true }), 0).groundHeat, false)
+-- In the snow a cave is only a windbreak, an inn is still an inn.
+near("a cave in winterspring at night is cold", Model.Compute(state({ base = -80, climate = "snow", hour = 5, indoors = true }), 0).target, -52.8)
+check("a cave in winterspring at night reads cold", Model.Band(Model.Compute(state({ base = -80, climate = "snow", hour = 5, indoors = true }), 0).target).word, "Cold")
+near("a cave in dun morogh at night", Model.Compute(state({ base = -60, climate = "snow", hour = 5, indoors = true }), 0).target, -40.8)
+near("an inn in the snow is as warm as before", Model.Compute(state({ base = -80, climate = "snow", hour = 5, indoors = true, inn = true }), 0).target, 11)
+near("a house in a temperate night is as before", Model.Compute(state({ base = 5, climate = "temperate", hour = 5, indoors = true }), 0).target, -1)
 near("a roof still cools desert heat", Model.Compute(state({ base = 55, climate = "desert", hour = 15, indoors = true }), 0).target, 47)
 near("inside place ignores the inn", Model.Compute(state({ base = -20, indoors = true, inn = true, inside = true }), 0).target, -20)
 check("inside place is not cozy", Model.Compute(state({ base = -20, indoors = true, inn = true, inside = true }), 0).cozy, false)
@@ -335,6 +370,22 @@ check("two undead choices", #ns.UndeadFeelOrder, 2)
 check("always cold is gone", ns.UndeadFeel.cold, nil)
 check("only the undead fear fire", ns.UndeadFeel.living.fireSpells or ns.Races.Dwarf.fireSpells or ns.Fur.fireSpells, nil)
 
+-- Frost spells chill every body for a moment
+check("no frost spell", Model.FrostSpellChill(nil), 0)
+check("frost spell just hit", Model.FrostSpellChill(0), 1)
+near("frost spell fading", Model.FrostSpellChill(2.5), 0.5)
+check("frost spell faded", Model.FrostSpellChill(4), 0)
+near("a frost spell chills a mild day", Model.Compute(state({ base = 15, frostSpell = 1 }), 0).target, -85)
+near("a fading frost spell", Model.Compute(state({ base = 15, frostSpell = 0.5 }), 0).target, -35)
+near("frost step", Model.Compute(state({ base = 15, frostSpell = 0.5 }), 0).frost, -50)
+near("a frost spell warms no one who is colder", Model.Compute(state({ base = -95, frostSpell = 1 }), 0).target, -95)
+near("a frost spell chills the undead the same", Model.Compute(state({ base = 15, frostSpell = 1, body = ns.UndeadFeel.numb }), 0).target, -85)
+near("a frost spell in the hottest air", Model.Compute(state({ base = 120, frostSpell = 1 }), 0).target, -85)
+check("no ceiling report under a frost spell", Model.Compute(state({ base = 120, frostSpell = 0.5 }), 0).capped, false)
+near("fire underfoot beats a frost spell", Model.Compute(state({ base = 15, frostSpell = 1, burning = 1 }), 0).target, 100)
+near("a ghost feels no frost spell", Model.Compute(state({ base = 15, frostSpell = 1, dead = true }), 0).target, Model.DEAD_FEEL)
+check("a frost spell is not cozy", Model.Compute(state({ base = 5, indoors = true, inn = true, frostSpell = 1 }), 0).cozy, false)
+
 -- A drink warms a cold body
 near("sober", Model.Compute(state({ base = -60, drunk = 0 }), 0).target, -60)
 near("tipsy in the snow", Model.Compute(state({ base = -60, drunk = 1 }), 0).target, -50)
@@ -376,6 +427,31 @@ check("lava does not soak", Model.UpdateWetness(0, 1, state({ swimming = true, b
 check("a fire hit in the water may be lava: no soaking yet", Model.UpdateWetness(0, 1, state({ swimming = true, maybeLava = true }), 100), 0)
 check("a fire hit in the water keeps wet clothes wet", Model.UpdateWetness(1, 1, state({ swimming = true, maybeLava = true }), 100), 1)
 
+-- Reasons for the tooltip
+local function reasons(fields, wetness)
+	local s = state(fields)
+	local colder, warmer = Model.Reasons(s, Model.Compute(s, wetness or 0))
+	return table.concat(colder, ", ") .. " / " .. table.concat(warmer, ", ")
+end
+check("reasons in the snow at night", reasons({ base = -60, climate = "snow", hour = 5, weather = "snow", weatherIntensity = 1 }),
+	"a cold place, snow, the night / ")
+check("reasons by a fire with a drink", reasons({ base = -60, campfire = 1, drunk = 2 }), "a cold place / a campfire, a drink")
+check("reasons at a desert noon", reasons({ base = 55, climate = "desert", hour = 15 }), " / a hot place, the sun")
+check("reasons in the water", reasons({ base = 15, swimming = true }, 1), "the water / a warm place")
+check("reasons in wet clothes", reasons({ base = 15 }, 1), "wet clothes / a warm place")
+check("reasons in a cool place at night", reasons({ base = -15, climate = "temperate", hour = 5 }), "the night, a cool place / ")
+check("reasons under a roof in the heat", reasons({ base = 75, indoors = true }), "a roof / a hot place")
+check("reasons in an inn in the cold", reasons({ base = -60, indoors = true, inn = true }), "a cold place / the inn")
+check("reasons name the body", reasons({ base = -60, body = { cold = 0.75, heat = 1 }, bodyWord = "your fur" }), "a cold place / your fur")
+check("reasons in fire", reasons({ base = 0, burning = 1 }), " / fire")
+check("small steps get no word", reasons({ base = 2 }), " / ")
+check("at most three reasons a side", reasons({ base = -60, climate = "snow", hour = 5, weather = "snow", weatherIntensity = 1 }, 1),
+	"a cold place, snow, the night / ")
+check("a ghost's reason", reasons({ base = 60, dead = true }), "death / ")
+check("reasons name the holiday", reasons({ base = 5, climate = "temperate", hour = 15, month = 12, day = 24 }), "Winter Veil / the sun, a warm place")
+check("reasons name the season", reasons({ base = 5, climate = "temperate", hour = 15, month = 7, day = 20 }), " / the sun, a warm place, summer")
+check("reasons name a frost spell", reasons({ base = 15, frostSpell = 1 }), "a frost spell / a warm place")
+
 -- Shelter delay
 local memory = {}
 check("first reading counts at once", Model.SettleShelter(memory, "outdoors", 0), "outdoors")
@@ -388,6 +464,62 @@ check("short step outside ignored", Model.SettleShelter(memory, "outdoors", 21),
 check("back inside clears it", Model.SettleShelter(memory, "inn", 22), "inn")
 check("new pending starts over", Model.SettleShelter(memory, "outdoors", 23), "inn")
 check("outdoors after 2 s", Model.SettleShelter(memory, "outdoors", 25), "outdoors")
+
+-- Languages: every word and every line in chat has a Ukrainian text.
+for _, file in ipairs({ "Locale.lua", "Locale/uk.lua", "Flavor.lua" }) do
+	assert(loadfile("FeelsLike/" .. file))("FeelsLike", ns)
+end
+check("english is the default", ns.T("Cold"), "Cold")
+check("an unknown language is english", (function() ns.Locale.Set("xx") return ns.Locale.language .. ns.T("Cold") end)(), "enCold")
+check("ukrainian is listed with its own name", ns.Locale.names.uk, "Українська")
+check("the languages in the settings", table.concat(ns.Locale.order, ","), "en,uk")
+ns.Locale.Set("uk")
+check("ukrainian word", ns.T("Cold"), "Холодно")
+local texts = { "Freezing", "Cold", "Mild", "Warm", "Hot", "Scorching", "Cozy", "Colder", "Warmer",
+	"your fur", "your race", "dead flesh" }
+for _, word in ipairs(Model.REASON_WORDS) do
+	texts[#texts + 1] = word
+end
+local lineCount = 0
+for _, set in ipairs(ns.Flavor.SETS) do
+	for _, lines in pairs(set) do
+		for _, line in ipairs(lines) do
+			texts[#texts + 1] = line
+			lineCount = lineCount + 1
+		end
+	end
+end
+check("the chat lines were found", lineCount, 60)
+for _, text in ipairs(texts) do
+	local translated = ns.T(text)
+	check("ukrainian for: " .. text, translated ~= text and translated ~= "", true)
+end
+check("no text without a translation", next(ns.Locale.missing), nil)
+check("a text with no translation stays english", ns.T("no such text"), "no such text")
+check("and it is noted", ns.Locale.missing["no such text"], true)
+ns.Locale.Set("en")
+-- Every reason the model gives is in the list the translations are checked against.
+local known = {}
+for _, word in ipairs(Model.REASON_WORDS) do
+	known[word] = true
+end
+for _, fields in ipairs({
+	{ base = -60, climate = "snow", hour = 5, weather = "snow", weatherIntensity = 1 },
+	{ base = 55, climate = "desert", hour = 15, weather = "sandstorm", weatherIntensity = 1 },
+	{ base = 45, climate = "tropical", hour = 15, weather = "rain", weatherIntensity = 1, month = 7, day = 20 },
+	{ base = 5, climate = "temperate", hour = 5, month = 12, day = 24, campfire = 1, torch = true, drunk = 3 },
+	{ base = 5, climate = "temperate", hour = 15, month = 6, day = 25, indoors = true, inn = true },
+	{ base = -20, indoors = true, frostSpell = 1 }, { base = 20, swimming = true }, { base = 20, burning = 1 },
+	{ base = 60, dead = true }, { base = -60, body = { cold = 0.75, heat = 1 } }, { base = 5, climate = "temperate", hour = 15, month = 1, day = 20 },
+}) do
+	local s = state(fields)
+	local colder, warmer = Model.Reasons(s, Model.Compute(s, fields.swimming and 1 or 0.6))
+	for _, list in ipairs({ colder, warmer }) do
+		for _, word in ipairs(list) do
+			check("reason word is in the list: " .. word, known[word], true)
+		end
+	end
+end
 
 if failures > 0 then
 	print(failures .. " failed")
