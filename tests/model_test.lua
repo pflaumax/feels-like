@@ -57,6 +57,11 @@ check("extreme zero cold", cold, 0)
 check("extreme zero hot", hot, 0)
 cold, hot = Model.Extremes(70)
 check("extreme start", hot, 0)
+-- The hot glow starts with Scorching, the icy ring in Freezing.
+check("hot is not extreme yet", select(2, Model.Extremes(83)), 0)
+check("scorching starts the glow", select(2, Model.Extremes(84)) > 0, true)
+near("extreme half hot", select(2, Model.Extremes(100 - 100 / 12)), 0.5)
+check("cold is not extreme yet", (Model.Extremes(-70)), 0)
 cold, hot = Model.Extremes(-85)
 near("extreme half cold", cold, 0.5)
 check("extreme half cold hot", hot, 0)
@@ -67,7 +72,8 @@ cold, hot = Model.Extremes(-1000)
 check("extreme clamped cold", cold, 1)
 
 -- Day and night
-near("day peak desert", Model.DayNight(15, "desert"), 50)
+near("day peak desert", Model.DayNight(15, "desert"), 40)
+near("a desert afternoon stays below fire", Model.Compute({ base = 55, climate = "desert", hour = 15, weatherIntensity = 0 }, 0).target, 95)
 near("night low desert", Model.DayNight(5, "desert"), -50)
 near("day peak arid", Model.DayNight(15, "arid"), 30)
 near("dusk desert", Model.DayNight(21, "desert"), 0)
@@ -99,7 +105,24 @@ near("indoors on a mild day is the same", Model.Compute(state({ base = 15, indoo
 near("indoors at night is warmer", Model.Compute(state({ base = -5, indoors = true }), 0).target, 7)
 near("inn", Model.Compute(state({ base = 75, indoors = true, inn = true }), 0).target, 27.3)
 near("inn on a mild day is warmer", Model.Compute(state({ base = 15, indoors = true, inn = true }), 0).target, 21.3)
-near("instance ignores shelter", Model.Compute(state({ base = 100, indoors = true, inInstance = true }), 0).target, 100)
+near("instance ignores shelter", Model.Compute(state({ base = 90, indoors = true, inInstance = true }), 0).target, 90)
+near("a roof keeps no volcanic heat out", Model.Compute(state({ base = 90, climate = "volcanic", indoors = true }), 0).target, 90)
+near("a volcanic rest area is no cooler", Model.Compute(state({ base = 85, climate = "volcanic", indoors = true, inn = true }), 0).target, 85)
+check("a volcanic rest area is not cozy", Model.Compute(state({ base = 85, climate = "volcanic", indoors = true, inn = true }), 0).cozy, false)
+-- A volcanic rest building is no inn: not cozy when wet clothes cool you, no fast drying, a campfire counts.
+check("a volcanic rest area is no inn", Model.Compute(state({ base = 85, climate = "volcanic", indoors = true, inn = true }), 0.5).inn, false)
+check("soaked in a volcanic rest area is not cozy", Model.Compute(state({ base = 85, climate = "volcanic", indoors = true, inn = true }), 0.5).cozy, false)
+near("a volcanic rest area dries at the hot pace", Model.UpdateWetness(1, 9, state({ climate = "volcanic", indoors = true, inn = true }), 85), 0.8)
+-- A roof on hot ground still keeps the weather out.
+near("rain under a volcanic roof", Model.Compute(state({ base = 85, climate = "volcanic", indoors = true, weather = "rain", weatherIntensity = 1 }), 0).target, 80.2)
+near("rain on volcanic ground outdoors", Model.Compute(state({ base = 85, climate = "volcanic", weather = "rain", weatherIntensity = 1 }), 0).target, 73)
+check("volcanic ground is hot", Model.HasGroundHeat("volcanic"), true)
+check("desert ground is not", Model.HasGroundHeat("desert"), false)
+check("an unknown climate has no hot ground", Model.HasGroundHeat(nil), false)
+check("ground heat is reported under a roof", Model.Compute(state({ base = 85, climate = "volcanic", indoors = true }), 0).groundHeat, true)
+check("no ground heat report outdoors", Model.Compute(state({ base = 85, climate = "volcanic" }), 0).groundHeat, false)
+check("no ground heat report in a volcanic instance", Model.Compute(state({ base = 85, climate = "volcanic", indoors = true, inInstance = true }), 0).groundHeat, false)
+near("a roof still cools desert heat", Model.Compute(state({ base = 55, climate = "desert", hour = 15, indoors = true }), 0).target, 47)
 near("inside place ignores the inn", Model.Compute(state({ base = -20, indoors = true, inn = true, inside = true }), 0).target, -20)
 check("inside place is not cozy", Model.Compute(state({ base = -20, indoors = true, inn = true, inside = true }), 0).cozy, false)
 near("inside place keeps campfire", Model.Compute(state({ base = -20, indoors = true, inn = true, inside = true, campfire = 1 }), 0).target, 15)
@@ -112,7 +135,11 @@ check("campfire on a mild day is cozy", Model.Compute(state({ base = 20, campfir
 near("campfire does not cool", Model.Compute(state({ base = 90, campfire = 1 }), 0).target, 90)
 -- Torch
 near("torch", Model.Compute(state({ base = -60, torch = true }), 0).target, -40)
-near("torch and campfire share the limit", Model.Compute(state({ base = 0, campfire = 1, torch = true }), 0).target, 45)
+near("a torch adds nothing by a warm fire", Model.Compute(state({ base = 0, campfire = 1, torch = true }), 0).target, 35)
+-- A torch warms a cold body, but it makes no mild day warm.
+near("torch on a mild day stops at its ceiling", Model.Compute(state({ base = 15, torch = true }), 0).target, 20)
+near("torch on a warm day adds nothing", Model.Compute(state({ base = 30, torch = true }), 0).target, 30)
+near("torch on a cold night gives all its warmth", Model.Compute(state({ base = -25, torch = true }), 0).target, -5)
 near("torch next to a campfire", Model.Compute(state({ base = -60, campfire = 1, torch = true }), 0).target, -5)
 check("torch is not cozy", Model.Compute(state({ base = 0, torch = true }), 0).cozy, false)
 near("torch in an inn", Model.Compute(state({ base = 5, indoors = true, inn = true, torch = true }), 0).target, 20.3)
@@ -124,12 +151,34 @@ check("soaked on a mild night is cold", Model.Band(Model.Compute(state({ base = 
 check("soaked in the snow is freezing", Model.Band(Model.Compute(state({ base = -60 }), 1).target).word, "Freezing")
 near("soaked at a desert noon", Model.Compute(state({ base = 100 }), 1).target, 0)
 near("no wet chill below the scale", Model.Compute(state({ base = -110 }), 1).wet, 0)
+-- Hot springs
+near("a swim in a hot spring chills nothing", Model.Compute(state({ base = 18, swimming = true, hotWater = true }), 1).target, 18)
+near("wet clothes by a hot spring chill on the shore", Model.Compute(state({ base = 18, hotWater = true }), 1).target, -41)
+near("a swim in cold water still chills", Model.Compute(state({ base = 18, swimming = true }), 1).target, -41)
+near("a campfire adds nothing in a hot spring", Model.Compute(state({ base = 18, swimming = true, hotWater = true, campfire = 1 }), 1).target, 18)
 near("weather scaled", Model.Compute(state({ base = 0, weather = "snow", weatherIntensity = 0.5 }), 0).target, -10)
-near("clamped", Model.Compute(state({ base = 120 }), 0).target, 100)
+near("clamped", Model.Compute(state({ base = -120 }), 0).target, -100)
+-- No air is as hot as fire: only fire underfoot reaches the top.
+near("the hottest air stays below fire", Model.Compute(state({ base = 120 }), 0).target, 95)
+check("the air ceiling is reported", Model.Compute(state({ base = 120 }), 0).capped, true)
+check("no ceiling report below it", Model.Compute(state({ base = 90 }), 0).capped, false)
+check("no ceiling report in fire", Model.Compute(state({ base = 120, burning = 1 }), 0).capped, false)
+check("no ceiling report for a ghost", Model.Compute(state({ base = 120, dead = true }), 0).capped, false)
+near("a tauren in the hottest air stays below fire", Model.Compute(state({ base = 95, body = { cold = 0.75, heat = 1.15 } }), 0).target, 95)
+near("a sandstorm at a desert noon stays below fire", Model.Compute(
+	{ base = 55, climate = "desert", hour = 15, weather = "sandstorm", weatherIntensity = 1 }, 0).target, 95)
+near("fire underfoot in the hottest air reaches the top", Model.Compute(state({ base = 120, burning = 1 }), 0).target, 100)
 check("inn cozy", Model.Compute(state({ base = 5, indoors = true, inn = true }), 0).cozy, true)
 check("campfire too hot not cozy", Model.Compute(state({ base = 75, campfire = 1 }), 0).cozy, false)
 check("campfire still cold not cozy", Model.Compute(state({ base = -100, campfire = 1 }), 0).cozy, false)
 check("outdoors not cozy", Model.Compute(state({ base = 0 }), 0).cozy, false)
+near("a campfire warms no swimmer", Model.Compute(state({ base = 15, campfire = 1, swimming = true }), 1).target, -42.5)
+near("no campfire step in the water", Model.Compute(state({ base = 15, campfire = 1, swimming = true }), 1).campfire, 0)
+check("a swim next to a campfire is not cozy", Model.Compute(state({ base = 15, campfire = 1, swimming = true }), 1).cozy, false)
+check("a swim in an inn is not cozy", Model.Compute(state({ base = 5, indoors = true, inn = true, swimming = true }), 0).cozy, false)
+check("a hot spring next to a campfire is not cozy", Model.Compute(state({ base = 15, campfire = 1, swimming = true, hotWater = true }), 1).cozy, false)
+check("damp on the shore by a campfire is cozy", Model.Compute(state({ base = 15, campfire = 1 }), 0.5).cozy, true)
+check("soaked on the shore by a campfire is not cozy yet", Model.Compute(state({ base = 15, campfire = 1 }), 1).cozy, false)
 check("inn reported", Model.Compute(state({ base = 5, indoors = true, inn = true }), 0).inn, true)
 check("no inn in an instance", Model.Compute(state({ base = 5, indoors = true, inn = true, inInstance = true }), 0).inn, false)
 check("no inn outdoors", Model.Compute(state({ base = 5 }), 0).inn, false)
@@ -179,18 +228,25 @@ near("tauren in the heat", Model.Compute(state({ base = 50, body = tauren }), 0)
 near("undead scaled before the clamp", Model.Compute(state({ base = 105, body = undead }), 0).target, 63)
 near("undead in lava", Model.Compute(state({ base = -60, burning = 1, body = undead }), 0).target, 100)
 near("wet clothes scaled too", Model.Compute(state({ base = -60, body = dwarf }), 1).target, -60)
-near("human by a fire at night", Model.Compute(state({ base = -68, campfire = 1 }), 0).target, -33)
-check("human by a fire at night is cozy", Model.Compute(state({ base = -68, campfire = 1 }), 0).cozy, true)
-near("troll by a fire at night", Model.Compute(state({ base = -68, campfire = 1, body = troll }), 0).target, -39.6)
-check("troll by a fire at night is not cozy", Model.Compute(state({ base = -68, campfire = 1, body = troll }), 0).cozy, false)
+near("human by a fire at night", Model.Compute(state({ base = -56, campfire = 1 }), 0).target, -21)
+check("human by a fire at night is cozy", Model.Compute(state({ base = -56, campfire = 1 }), 0).cozy, true)
+near("troll by a fire at night", Model.Compute(state({ base = -56, campfire = 1, body = troll }), 0).target, -25.2)
+check("troll by a fire at night is not cozy", Model.Compute(state({ base = -56, campfire = 1, body = troll }), 0).cozy, false)
+-- By a campfire in Dun Morogh: Cozy by day, too close to Cold before dawn.
+check("dun morogh day by a fire is cozy", Model.Compute(state({ base = -60, climate = "snow", hour = 15, campfire = 1 }), 0).cozy, true)
+check("dun morogh night by a fire is not cozy", Model.Compute(state({ base = -60, climate = "snow", hour = 5, campfire = 1 }), 0).cozy, false)
+check("dun morogh night by a fire with a drink is cozy", Model.Compute(state({ base = -60, climate = "snow", hour = 5, campfire = 1, drunk = 1 }), 0).cozy, true)
+-- Cozy is never close to Cold.
+near("the cold edge of mild by a fire", Model.Compute(state({ base = -68, campfire = 1 }), 0).target, -33)
+check("the cold edge of mild by a fire is not cozy", Model.Compute(state({ base = -68, campfire = 1 }), 0).cozy, false)
 for name, body in pairs({ dwarf = dwarf, undead = undead, tauren = tauren, troll = troll }) do
 	near("mild stays mild for " .. name, Model.Compute(state({ base = 0, body = body }), 0).target, 0)
 end
 -- A fire warms every body only up to Warm.
 near("tauren by a fire on a mild day", Model.Compute(state({ base = 15, campfire = 1, body = tauren }), 0).target, 45)
 check("tauren by a fire on a mild day is cozy", Model.Compute(state({ base = 15, campfire = 1, body = tauren }), 0).cozy, true)
-near("tauren with a torch on a warm day", Model.Compute(state({ base = 30, torch = true, body = tauren }), 0).target, 45)
-near("tauren by a fire and a torch", Model.Compute(state({ base = 0, campfire = 1, torch = true, body = tauren }), 0).target, 45)
+near("tauren with a torch on a warm day", Model.Compute(state({ base = 30, torch = true, body = tauren }), 0).target, 34.5)
+near("tauren by a fire and a torch", Model.Compute(state({ base = 10, campfire = 1, torch = true, body = tauren }), 0).target, 45)
 -- A fire never cools a body that is hotter without it.
 near("hot tauren by a fire", Model.Compute(state({ base = 50, campfire = 1, body = tauren }), 0).target, 57.5)
 near("warm tauren by a fire", Model.Compute(state({ base = 42, campfire = 1, body = tauren }), 0).target, 48.3)
@@ -199,15 +255,6 @@ near("damp warm tauren by a fire", Model.Compute(state({ base = 44, campfire = 1
 	Model.Compute(state({ base = 44, body = tauren }), 0.01).target)
 -- Below the ceiling the fire row stays as before.
 near("dwarf by a fire at night", Model.Compute(state({ base = -68, campfire = 1, body = dwarf }), 0).target, -24.75)
--- A body that runs cold.
-local runsCold = { cold = 0.4, heat = 0.4, shift = -40 }
-near("shift on the cold side", Model.BodyFeel(-88, runsCold), -75.2)
-near("shift on the warm side", Model.BodyFeel(15, runsCold), -34)
-near("shift at mild", Model.BodyFeel(0, runsCold), -40)
-near("runs cold in a desert", Model.Compute(state({ base = 105, body = runsCold }), 0).target, 2)
-near("runs cold by a fire", Model.Compute(state({ base = 15, campfire = 1, body = runsCold }), 0).target, -22)
-check("runs cold by a fire is cozy", Model.Compute(state({ base = 15, campfire = 1, body = runsCold }), 0).cozy, true)
-near("runs cold in lava", Model.Compute(state({ base = 15, burning = 1, body = runsCold }), 0).target, 100)
 -- Every Forever race is in the table, and every entry has both factors.
 assert(loadfile("FeelsLike/Data/Races.lua"))("FeelsLike", ns)
 for _, race in ipairs({ "Human", "Orc", "Dwarf", "NightElf", "Scourge", "Tauren", "Gnome", "Troll", "Skyborne" }) do
@@ -223,8 +270,7 @@ for name, body in pairs(ns.UndeadFeel) do
 end
 for name, body in pairs(bodies) do
 	check("body factors: " .. name, type(body.cold) == "number" and body.cold > 0
-		and type(body.heat) == "number" and body.heat > 0
-		and (body.shift == nil or type(body.shift) == "number"), true)
+		and type(body.heat) == "number" and body.heat > 0, true)
 end
 check("numb is the race's own body", ns.UndeadFeel.numb, ns.Races.Scourge)
 local listed = {}
@@ -276,14 +322,17 @@ check("fire spell faded", Model.FireSpellBurning(4), 0)
 local numbUndead = ns.UndeadFeel.numb
 near("a fire spell scorches the undead", Model.Compute(state({ base = -60, fireSpell = 1, body = numbUndead }), 0).target, 100)
 near("a fading fire spell", Model.Compute(state({ base = -60, fireSpell = 0.5, body = numbUndead }), 0).target, 35)
-near("a fire spell scorches undead that run cold", Model.Compute(state({ base = -60, fireSpell = 1, body = ns.UndeadFeel.cold }), 0).target, 100)
 near("a fire spell does not burn a human", Model.Compute(state({ base = -60, fireSpell = 1 }), 0).target, -60)
 near("a fire spell does not burn undead like the living", Model.Compute(state({ base = -60, fireSpell = 1, body = ns.UndeadFeel.living }), 0).target, -60)
 near("a fire spell does not burn a dwarf", Model.Compute(state({ base = -60, fireSpell = 1, body = ns.Races.Dwarf }), 0).target, -45)
 near("burning reports the fire spell", Model.Compute(state({ base = -60, fireSpell = 0.5, body = numbUndead }), 0).burning, 0.5)
 near("burning takes the stronger fire", Model.Compute(state({ base = -60, burning = 1, fireSpell = 0.5, body = numbUndead }), 0).burning, 1)
 near("burning without a fire spell for a human", Model.Compute(state({ base = -60, fireSpell = 1 }), 0).burning, 0)
-check("the undead fear fire", ns.Races.Scourge.fireSpells and ns.UndeadFeel.cold.fireSpells, true)
+check("the undead fear fire", ns.Races.Scourge.fireSpells, true)
+check("numb undead by a fire are cozy", Model.Compute(state({ base = 15, campfire = 1, body = ns.UndeadFeel.numb }), 0).cozy, true)
+-- Two choices for the undead: numb or like the living.
+check("two undead choices", #ns.UndeadFeelOrder, 2)
+check("always cold is gone", ns.UndeadFeel.cold, nil)
 check("only the undead fear fire", ns.UndeadFeel.living.fireSpells or ns.Races.Dwarf.fireSpells or ns.Fur.fireSpells, nil)
 
 -- A drink warms a cold body
@@ -307,7 +356,7 @@ near("burning freezing zone", Model.Compute(state({ base = -100, burning = 1 }),
 near("half burning", Model.Compute(state({ base = -60, burning = 0.5 }), 0).target, 20)
 near("burning wet", Model.Compute(state({ base = 0, burning = 1 }), 1).target, 100)
 check("burning not cozy", Model.Compute(state({ base = 5, indoors = true, inn = true, burning = 1 }), 0).cozy, false)
-near("no negative burn when already hot", Model.Compute(state({ base = 100, campfire = 1, burning = 1 }), 0).burn, 0)
+near("fire burns the rest above the hottest air", Model.Compute(state({ base = 100, campfire = 1, burning = 1 }), 0).burn, 5)
 
 -- Wetness
 check("swimming soaks", Model.UpdateWetness(0, 1, state({ swimming = true }), 0), 1)
@@ -324,6 +373,8 @@ near("inside place is no inn for drying", Model.UpdateWetness(1, 9, state({ inn 
 near("campfire dries fast", Model.UpdateWetness(1, 7.5, state({ campfire = 1 }), -60), 0.5)
 check("fire dries at once", Model.UpdateWetness(1, 1, state({ burning = 0.3 }), -60), 0)
 check("lava does not soak", Model.UpdateWetness(0, 1, state({ swimming = true, burning = 1 }), 100), 0)
+check("a fire hit in the water may be lava: no soaking yet", Model.UpdateWetness(0, 1, state({ swimming = true, maybeLava = true }), 100), 0)
+check("a fire hit in the water keeps wet clothes wet", Model.UpdateWetness(1, 1, state({ swimming = true, maybeLava = true }), 100), 1)
 
 -- Shelter delay
 local memory = {}

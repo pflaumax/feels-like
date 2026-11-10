@@ -14,17 +14,17 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 **Weather.** Rain and snow cool you down, and sandstorms heat you up.
 
-**Shelter.** A building feels like a warm room. It's cooler than a hot day outside and warmer than a freezing night. An inn feels cozy.
+**Shelter.** A building feels like a warm room. It's cooler than a hot day outside and warmer than a freezing night. An inn feels cozy. Volcanic heat comes from the ground, so a roof doesn't help there.
 
 **Campfire.** Sit by a fire to warm up and feel cozy, including the new camp fires in Forever. Once you sat down, you can get up and walk around the fire and still stay warm. A fire makes you warm but never hot.
 
 **Torch.** Light the Night Watchman's Torch or hold a lit torch, and a cold night gets a bit warmer.
 
-**Fire underfoot.** Step into a campfire or lava and the needle jumps to scorching. Fire spells from enemies don't count, except for the undead (see Race).
+**Fire underfoot.** Step into a campfire or lava and the needle jumps to the very top of the scale. No weather takes it that far. Fire spells from enemies don't count, except for the undead (see Race). In a fight, and for a few seconds after it, the game can't tell a fire underfoot from a fire spell, so only lava in volcanic places counts then.
 
-**Water.** A swim chills you. It's cold in a mild zone, freezing in the snow and just refreshing in a desert. Your clothes dry over time, and faster when it's warm.
+**Water.** A swim chills you. It's cold in a mild zone, freezing in the snow and just refreshing in a desert. Your clothes dry over time, and faster when it's warm. Hot springs are the exception: a swim there doesn't chill you.
 
-**Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either, but they fear fire: a fire spell in a fight scorches them for a moment. Druids in cat, bear, travel or moonkin form have fur, like tauren. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
+**Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either, but they fear fire: a fire spell in a fight scorches them for a moment. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
 
 **Drink.** Get tipsy and a cold night feels a little warmer. The more you drink, the warmer, but never past Mild, and the heat stays the same. The addon follows the game's own lines like "You feel tipsy. Whee!", so it works in every language.
 
@@ -34,7 +34,7 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see one word next to it, like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.
 
-Now and then your character reacts with a short line in chat that only you see, like "A chill runs down your back." when the cold sets in, or "You warm your hands by the fire." It never repeats itself often and stays quiet in combat.
+Now and then your character reacts with a short line in chat that only you see, like "A chill runs down your back." when the cold sets in, or "You warm your hands by the fire." The undead have their own lines, because they don't breathe or sweat. It never repeats itself often and stays quiet in combat.
 
 The gauge sits by the minimap. Hold Shift and drag it to move it anywhere you like.
 
@@ -45,7 +45,7 @@ Open Options, then AddOns, then Feels Like. You can
 - switch between Celsius and Fahrenheit
 - show the word on hover, always or never
 - choose whether your race changes how you feel
-- choose how the undead feel: numb, always cold or like the living
+- choose how the undead feel: numb or like the living
 - turn the lines in chat on or off
 - lock the gauge in place
 - change its size
@@ -80,7 +80,7 @@ Open Options, then AddOns, then Feels Like. You can
 
 **Which versions of the game?** It's made for WoW Forever. It also loads on Retail, but there only a few old zones have a climate, so most places read as Mild.
 
-**My undead should feel the cold.** Pick how the undead feel in the settings: Numb (they hardly feel the weather), Always cold (their bodies run cold) or Like the living.
+**My undead should feel the cold.** Pick Like the living under Undead feel in the settings, and your undead feels the weather like a human. The default is Numb: dead flesh hardly feels the weather.
 
 **A zone feels wrong.** Stand there, type `/feels debug` and send me what it prints. Ideas for what should make you colder or warmer are always welcome too.
 
@@ -94,7 +94,7 @@ local value, word, cozy = FeelsLike.GetTemperature()
 
 - `value` is the felt temperature from -100 (coldest) to 100 (hottest), the addon's own scale, not degrees.
 - `word` is the word for that reading: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy.
-- `cozy` is true by a fire or in an inn when the reading there is Mild or Warm. Cold by a fire is not Cozy, and neither is a hot inn.
+- `cozy` is true by a fire or in an inn when the reading there is Mild or Warm and not close to Cold. Cold by a fire is not Cozy, and neither is a hot inn or a swim.
 
 It always returns the real reading, also while `/feels test` moves the gauge, and nothing before the first reading, right after login. `FeelsLike.API_VERSION` is 1 and goes up only when a change breaks callers.
 

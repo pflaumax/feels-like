@@ -99,6 +99,16 @@ local COMBAT_GRACE = 15 -- seconds
 local lastCombatEnd
 local lastFireHit
 local lastFireSpellHit
+-- Lava hits a swimmer on a steady beat, also in a fight. One fire hit in the water is still a spell.
+-- A fire DoT in a lake has the same beat, so in a fight only a place with hot ground has lava.
+local LAVA_BEAT = 2.5 -- seconds between two hits that still count as lava
+local LAVA_MIN_BEAT = 0.5 -- hits closer than this are one spell that hit twice
+local lastSwimFireHit
+local lavaPlace = false -- the place of the last reading has hot ground
+-- The last fire hit of any kind and the gap before it, for /feels debug.
+local lastAnyFireHit
+local lastFireGap
+local FIRE_GAP_SHOWN = 10 -- seconds the gap stays in /feels debug
 local shelterMemory = {}
 
 -- Walk up the map parents to a known zone.
@@ -446,9 +456,21 @@ function Sensors.IsFireHit(action, amount, schoolMask)
 end
 
 -- Checked one frame after the hit. In a fight or just after it, the hit is a fire spell: returns true.
+-- A second hit on the lava beat while you swim on hot ground is lava, also in a fight.
 function Sensors.OnFireHit()
 	local now = GetTime()
-	if InCombatLockdown() or (lastCombatEnd and now - lastCombatEnd < COMBAT_GRACE) then
+	local fight = InCombatLockdown() or (lastCombatEnd and now - lastCombatEnd < COMBAT_GRACE)
+	-- Only a gap short enough to be a beat is worth showing.
+	local gap = lastAnyFireHit and now - lastAnyFireHit
+	lastFireGap = gap and gap <= FIRE_GAP_SHOWN and gap or nil
+	lastAnyFireHit = now
+	local lava = false
+	if IsSwimming() then
+		local beat = lastSwimFireHit and now - lastSwimFireHit
+		lava = lavaPlace and beat ~= nil and beat >= LAVA_MIN_BEAT and beat <= LAVA_BEAT
+		lastSwimFireHit = now
+	end
+	if fight and not lava then
 		lastFireSpellHit = now
 		return true
 	end
@@ -536,6 +558,8 @@ function Sensors.Read()
 	state.base = state.place.base
 	state.climate = state.place.climate
 	state.inside = state.place.inside == true
+	state.hotWater = state.place.hotWater == true
+	lavaPlace = ns.Model.HasGroundHeat(state.climate)
 
 	local hour, minute = GetGameTime()
 	state.hour = hour + minute / 60
@@ -575,6 +599,10 @@ function Sensors.Read()
 		feigning = false
 	end
 	state.dead = not IsSecret(dead) and dead and not feigning or false
+	-- One fire hit in the water on hot ground may be lava. Until the next hit tells, the swim soaks nothing.
+	state.maybeLava = lavaPlace and state.swimming and lastSwimFireHit ~= nil
+		and GetTime() - lastSwimFireHit <= LAVA_BEAT
+	state.fireGap = lastAnyFireHit and GetTime() - lastAnyFireHit <= FIRE_GAP_SHOWN and lastFireGap or nil
 	state.burning = ns.Model.Burning(lastFireHit and GetTime() - lastFireHit, state.swimming)
 	state.fireSpell = ns.Model.FireSpellBurning(lastFireSpellHit and GetTime() - lastFireSpellHit)
 	return state

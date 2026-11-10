@@ -10,8 +10,9 @@ Model.MAX = 100
 Model.SWEEP = 270 -- arc in degrees
 Model.SEGMENT_COUNT = 12
 
--- Ring and face change color past this value.
-local EXTREME_START = 70
+-- Ring and face change color past these values: icy in Freezing, hot where Scorching starts.
+local COLD_EXTREME_START = 70
+local HOT_EXTREME_START = Model.MAX - (Model.MAX - Model.MIN) / Model.SEGMENT_COUNT
 
 local function rgb(hex)
 	return {
@@ -89,7 +90,8 @@ end
 -- Returns how cold and how hot, each from 0 to 1.
 function Model.Extremes(t)
 	t = Model.Clamp(t)
-	local k = (math.abs(t) - EXTREME_START) / (Model.MAX - EXTREME_START)
+	local start = t < 0 and COLD_EXTREME_START or HOT_EXTREME_START
+	local k = (math.abs(t) - start) / (Model.MAX - start)
 	if k <= 0 then
 		return 0, 0
 	elseif t < 0 then
@@ -100,9 +102,9 @@ end
 
 -- Felt temperature.
 
--- How much the time of day changes the reading per climate.
+-- How much the time of day changes the reading per climate. A desert afternoon stays below the top of the scale.
 Model.CLIMATE_SWING = {
-	desert = { day = 50, night = 50 },
+	desert = { day = 40, night = 50 },
 	arid = { day = 30, night = 30 },
 	temperate = { day = 10, night = 30 },
 	snow = { day = 8, night = 8 },
@@ -141,11 +143,15 @@ local CAMPFIRE_WARMTH = 35
 local TORCH_WARMTH = 20
 -- A fire warms you up to this and no further.
 local FIRE_CEILING = 45
+-- A torch warms a cold body only up to this: no torch makes a mild day warm.
+local TORCH_CEILING = 20
+-- No air is as hot as fire. Only fire underfoot takes the reading above this.
+local AIR_CEILING = 95
 -- Share of warmth that soaked clothes take away.
 local WET_CHILL = 0.5
 
--- Cozy only when the result is Mild or Warm.
-local COZY_FIRST_SEGMENT = 5
+-- Cozy only when the result is Mild or Warm, and not close to Cold.
+local COZY_MIN = -25
 local COZY_LAST_SEGMENT = 9
 
 local HOT_DRY_TIME = 45 -- seconds from soaked to dry
@@ -235,9 +241,17 @@ local function HasOwnShelter(state)
 end
 Model.HasOwnShelter = HasOwnShelter
 
+-- Heat that comes from the ground. A roof keeps the weather out there, but none of the heat, and no inn is cozy.
+local GROUND_HEAT = { volcanic = true }
+
+-- True where the ground is hot. Lava is expected there.
+function Model.HasGroundHeat(climate)
+	return GROUND_HEAT[climate] == true
+end
+
 -- An inn counts only where shelter applies.
 local function InInn(state)
-	return state.inn and not HasOwnShelter(state)
+	return state.inn and not HasOwnShelter(state) and not GROUND_HEAT[state.climate]
 end
 
 -- hour is from 0 to 24.
@@ -263,12 +277,12 @@ function Model.DayNight(hour, climate)
 	return -swing.night * depth
 end
 
--- Scales the distance from Mild by the body's cold or heat factor, then adds its shift. No body is like a human.
+-- Scales the distance from Mild by the body's cold or heat factor. No body is like a human.
 function Model.BodyFeel(t, body)
 	if not body then
 		return t
 	end
-	return t * (t < 0 and body.cold or body.heat) + (body.shift or 0)
+	return t * (t < 0 and body.cold or body.heat)
 end
 
 -- Returns the room temperature and the share of outside air that gets in.
@@ -297,46 +311,57 @@ function Model.Compute(state, wetness)
 	local inn = InInn(state) or false
 	r.inn = inn
 	local roomTemperature, outsideAir = Shelter(state)
-	r.sheltered = roomTemperature + (r.env - roomTemperature) * outsideAir
+	-- Under a roof on hot ground only the weather stays outside.
+	r.groundHeat = GROUND_HEAT[state.climate] and outsideAir < 1 or false
+	if r.groundHeat then
+		r.sheltered = r.env - r.weather * (1 - outsideAir)
+	else
+		r.sheltered = roomTemperature + (r.env - roomTemperature) * outsideAir
+	end
 
-	-- An inn is already warm, and water puts a torch out.
-	local campfire = inn and 0 or (state.campfire or 0)
+	-- An inn is already warm. In the water a campfire warms nothing and a torch goes out.
+	local campfire = (inn or state.swimming) and 0 or (state.campfire or 0)
 	local torch = not inn and state.torch and not state.swimming
 	local room = math.max(0, FIRE_CEILING - r.sheltered)
 	r.campfire = math.min(CAMPFIRE_WARMTH * campfire, room)
-	r.torch = torch and math.min(TORCH_WARMTH, room - r.campfire) or 0
+	r.torch = torch and math.min(TORCH_WARMTH, math.max(0, TORCH_CEILING - r.sheltered - r.campfire)) or 0
 	r.dry = r.sheltered + r.campfire + r.torch
 	-- Humid air feels hotter, but it dries nothing.
 	r.drying = r.dry - r.humid * outsideAir
-	r.wet = -WET_CHILL * wetness * math.max(0, r.dry - Model.MIN)
+	-- Hot water chills nothing while you swim in it. Wet clothes chill again on the shore.
+	local chill = state.swimming and state.hotWater and 0 or WET_CHILL * wetness
+	r.wet = 0 - chill * math.max(0, r.dry - Model.MIN) -- no negative zero in /feels debug
 	-- The body feels the cold and the heat by race. Fire underfoot burns everyone alike.
 	local unscaled = r.dry + r.wet
 	local scaled = Model.BodyFeel(unscaled, state.body)
 	-- A fire warms no body past the ceiling, and it never cools a body that is hotter without it.
 	if r.campfire + r.torch > 0 then
-		local withoutFire = r.sheltered - WET_CHILL * wetness * math.max(0, r.sheltered - Model.MIN)
+		local withoutFire = r.sheltered - chill * math.max(0, r.sheltered - Model.MIN)
 		scaled = math.min(scaled, math.max(FIRE_CEILING, Model.BodyFeel(withoutFire, state.body)))
 	end
 	r.race = scaled - unscaled
 	-- A drink warms only a cold body, and never past the middle of Mild.
 	r.drink = math.min(DRINK_WARMTH[state.drunk] or 0, math.max(0, -scaled))
 	-- Fire underfoot pulls the reading toward hot. Fire spells in a fight burn only a body that feels them.
-	local beforeBurn = scaled + r.drink
+	local beforeBurn = math.min(scaled + r.drink, AIR_CEILING)
 	local fireSpell = state.body and state.body.fireSpells and state.fireSpell or 0
 	r.burning = math.max(state.burning or 0, fireSpell)
 	r.burn = math.max(0, (Model.MAX - beforeBurn) * r.burning)
 	r.felt = beforeBurn + r.burn
 	r.target = Model.Clamp(r.felt)
+	-- Held at the air ceiling, for /feels debug. Not while fire lifts the reading over it.
+	r.capped = scaled + r.drink > AIR_CEILING and r.burn == 0
 
 	-- A ghost or a wisp feels nothing of the place.
 	if state.dead then
-		r.felt, r.target, r.cozy = Model.DEAD_FEEL, Model.DEAD_FEEL, false
+		r.felt, r.target, r.cozy, r.capped = Model.DEAD_FEEL, Model.DEAD_FEEL, false, false
 		return r
 	end
 
-	local segment = Model.SegmentIndex(r.target)
 	local byFire = (state.campfire or 0) >= 0.5
-	r.cozy = (inn or byFire) and segment >= COZY_FIRST_SEGMENT and segment <= COZY_LAST_SEGMENT or false
+	-- No one is cozy in the water.
+	r.cozy = (inn or byFire) and not state.swimming and r.target >= COZY_MIN
+		and Model.SegmentIndex(r.target) <= COZY_LAST_SEGMENT or false
 	return r
 end
 
@@ -346,7 +371,8 @@ function Model.UpdateWetness(wetness, dt, state, dryTemperature)
 	if (state.burning or 0) > 0 then
 		return 0
 	elseif state.swimming then
-		return 1
+		-- Lava soaks nothing, and a fire hit in the water may be lava.
+		return state.maybeLava and wetness or 1
 	end
 
 	local raining = state.weather == "rain" and not (state.indoors or state.inside)

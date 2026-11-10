@@ -1,10 +1,10 @@
 -- How strongly each race feels the cold and the heat. 1 is like a human. Keys are UnitRace's English names.
--- A shift moves the whole feel, for a body that runs cold. Fire spells in a fight burn a body with fireSpells.
+-- Fire spells in a fight burn a body with fireSpells.
 
 local _, ns = ...
 
-local function Body(cold, heat, shift)
-	return { cold = cold, heat = heat, shift = shift }
+local function Body(cold, heat)
+	return { cold = cold, heat = heat }
 end
 
 -- Dead flesh fears fire: a fire spell scorches it, not only fire underfoot.
@@ -25,20 +25,20 @@ ns.Races = {
 	Skyborne = Body(1, 1), -- both factions
 }
 
--- The undead choose how they feel. Numb is the default.
+-- The undead choose how they feel: dead flesh that hardly feels the weather, or like everyone else. Numb is the default.
 ns.UndeadFeel = {
 	numb = ns.Races.Scourge,
-	cold = Undead(Body(0.4, 0.4, -40)), -- runs cold: chilly almost everywhere
 	living = ns.Races.Human, -- also in fire
 }
-ns.UndeadFeelNames = { numb = "Numb", cold = "Always cold", living = "Like the living" }
-ns.UndeadFeelOrder = { "numb", "cold", "living" } -- as the settings list them
+ns.UndeadFeelNames = { numb = "Numb", living = "Like the living" }
+ns.UndeadFeelOrder = { "numb", "living" } -- as the settings list them
 
 -- Forms with fur feel like a tauren. Keys are GetShapeshiftFormID's IDs.
 ns.Fur = ns.Races.Tauren
 ns.FurForms = {
 	[1] = "Cat Form",
 	[3] = "Travel Form",
+	[4] = "Aquatic Form",
 	[5] = "Bear Form",
 	[8] = "Dire Bear Form",
 	[31] = "Moonkin Form", -- feathers over fur

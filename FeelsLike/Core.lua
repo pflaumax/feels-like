@@ -64,6 +64,10 @@ local function InitDB()
 		FeelsLikeDB.scale = nil
 	end
 	FeelsLikeDB.version = DB_VERSION
+	-- An undead choice that is gone, like Always cold of 0.2.0, goes back to the default.
+	if FeelsLikeDB.undead ~= nil and not ns.UndeadFeel[FeelsLikeDB.undead] then
+		FeelsLikeDB.undead = nil
+	end
 	for key, value in pairs(ns.DEFAULTS) do
 		if FeelsLikeDB[key] == nil then
 			FeelsLikeDB[key] = value
@@ -118,7 +122,9 @@ local function Update()
 	-- The character's own reaction, now and then. Combat or a test holds it back for later. A ghost's cold is
 	-- no news, so the lines wait for the real reading.
 	if not state.dead then
-		ns.Flavor.OnReading(result, now, test ~= nil or InCombatLockdown(), not FeelsLikeDB.flavor)
+		-- The undead have their own lines whatever they feel, also with Feel by race off: they still do not breathe.
+		ns.Flavor.OnReading(result, now, test ~= nil or InCombatLockdown(), not FeelsLikeDB.flavor,
+			state.race == "Scourge")
 	end
 end
 
@@ -220,6 +226,9 @@ local function PrintDebug()
 	if not ownShelter and s.rawShelter ~= s.shelter then
 		shelter = shelter .. " (" .. s.rawShelter .. " in a moment)"
 	end
+	if r.groundHeat then
+		shelter = shelter .. ", no shelter from the heat of the ground"
+	end
 	print(string.format("  env %s, %s: %s", Signed(r.env), shelter, Signed(r.sheltered)))
 	local details = {}
 	if s.campfireCamp == "sitting" then
@@ -238,7 +247,8 @@ local function PrintDebug()
 	local campfireDetails = #details > 0 and " (" .. table.concat(details, "; ") .. ")" or ""
 	print(string.format("  campfire %.2f%s: %s", s.campfire, campfireDetails, Signed(r.campfire)))
 	print(string.format("  torch %s: %s", s.torch or "none", Signed(r.torch)))
-	print(string.format("  swimming %s, wetness %.2f: %s", s.swimming and "yes" or "no", wetness, Signed(r.wet)))
+	local swimming = s.swimming and (s.hotWater and "in hot water" or "yes") or "no"
+	print(string.format("  swimming %s, wetness %.2f: %s", swimming, wetness, Signed(r.wet)))
 	local race = s.race or "unknown"
 	if s.race and s.raceName and s.raceName ~= s.race then
 		race = string.format("%s (%s)", race, s.raceName)
@@ -254,9 +264,6 @@ local function PrintDebug()
 			race = race .. ", " .. ns.UndeadFeelNames[s.undead]:lower()
 		end
 		race = string.format("%s, cold x%.2f, heat x%.2f", race, s.body.cold, s.body.heat)
-		if s.body.shift then
-			race = race .. string.format(", shift %+d", s.body.shift)
-		end
 	elseif s.race then
 		race = race .. ", not in the table, feels like a human"
 	end
@@ -270,13 +277,21 @@ local function PrintDebug()
 	if s.body and s.body.fireSpells then
 		fireSpells = string.format(", fire spells %.2f (undead)", s.fireSpell)
 	end
-	print(string.format("  fire underfoot %.2f%s: %s", s.burning, fireSpells, Signed(r.burn)))
+	local fireNotes = {}
+	if s.fireGap then
+		fireNotes[#fireNotes + 1] = string.format("fire hits %.1f s apart", s.fireGap)
+	end
+	if s.maybeLava then
+		fireNotes[#fireNotes + 1] = "a fire hit in the water, lava if the next comes soon"
+	end
+	local fireDetails = #fireNotes > 0 and " (" .. table.concat(fireNotes, "; ") .. ")" or ""
+	print(string.format("  fire underfoot %.2f%s: %s%s", s.burning, fireSpells, Signed(r.burn), fireDetails))
 	print("  resistance, not counted yet: " .. DescribeResistances(ns.Sensors.ReadResistances()))
 	if s.dead then
 		print(string.format("  dead: the reading stays at %s until you are back", Signed(ns.Model.DEAD_FEEL)))
 	end
-	print(string.format("  felt %s, target %s: %s%s", Signed(r.felt), Signed(r.target), band.word,
-		test and " (test active, /feels test off)" or ""))
+	print(string.format("  felt %s, target %s: %s%s%s", Signed(r.felt), Signed(r.target), band.word,
+		r.capped and " (held below fire)" or "", test and " (test active, /feels test off)" or ""))
 	print("  flavor lines " .. ns.Flavor.Describe(GetTime(), FeelsLikeDB.flavor))
 	print("  renderer: " .. ns.Gauge.renderer)
 	print("  position: " .. ns.Gauge:DescribePosition())

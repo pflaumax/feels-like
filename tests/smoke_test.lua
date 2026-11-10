@@ -141,7 +141,9 @@ local function InstallGlobals(forever)
 	_G.C_Map = {
 		GetBestMapForUnit = function() return world.mapID end,
 		GetMapInfo = function(id) return { parentMapID = parents[id] or 0 } end,
-		GetAreaInfo = function(id) return ({ [439] = "The Shimmering Flats", [537] = "Fire Plume Ridge" })[id] end,
+		GetAreaInfo = function(id)
+			return ({ [439] = "The Shimmering Flats", [537] = "Fire Plume Ridge", [2246] = "Frostfire Hot Springs" })[id]
+		end,
 	}
 	_G.GetInstanceInfo = function() return unpack(world.instance) end
 	_G.GetGameTime = function() return world.hour, world.minute end
@@ -610,7 +612,7 @@ local soaked = Gauge.target
 check("soaked is colder than dry tanaris", soaked < 75 + 35 - 1, soaked)
 world.swimming = false
 Tick(120)
-check("dried in the heat", math.abs(Gauge.target - 100) < 0.01, Gauge.target)
+check("dried in the heat", math.abs(Gauge.target - 95) < 0.01, Gauge.target)
 
 -- Drying during a loading screen.
 world.mapID, world.zoneText = 1429, "Elwynn Forest"
@@ -1121,7 +1123,7 @@ Tick(1)
 world.instance = { "Molten Core", "raid", 9, "", 40, 0, false, 409 }
 world.indoors = true
 Tick(1)
-check("molten core", Gauge.target == 100, Gauge.target)
+check("molten core", Gauge.target == 95, Gauge.target)
 world.instance = { "Deadmines", "party", 1, "", 5, 0, false, 36 }
 Tick(1)
 check("unknown instance neutral", Gauge.target == 0, Gauge.target)
@@ -1132,7 +1134,26 @@ world.indoors = false
 world.mapID, world.zoneText, world.subzoneText, world.hour = 1449, "Un'Goro Crater", "Fire Plume Ridge", 15
 Tick(1)
 check("subzone override", Gauge.target == 90, Gauge.target)
+-- A swim in a hot spring chills nothing. The wet clothes chill on the shore.
+world.mapID, world.zoneText, world.subzoneText = 1452, "Winterspring", "Frostfire Hot Springs"
+Tick(1)
+check("hot spring shore", math.abs(Gauge.target - 18) < 0.01, Gauge.target)
+world.swimming = true
+Tick(3)
+check("a swim in a hot spring chills nothing", math.abs(Gauge.target - 18) < 0.01, Gauge.target)
+check("debug shows hot water", Slash("debug"):find("swimming in hot water, wetness 1.00: +0.0", 1, true))
+world.swimming = false
+Tick(1)
+check("out of the hot spring the wet clothes chill", Gauge.target < -30, Gauge.target)
+Tick(200)
 world.subzoneText = ""
+-- A roof keeps no volcanic heat out.
+world.mapID, world.zoneText, world.indoors = 1427, "Searing Gorge", true
+Tick(4)
+check("a searing gorge cave is as hot as outside", Gauge.target == 85, Gauge.target)
+check("debug says no shelter from ground heat", Slash("debug"):find("indoors, no shelter from the heat of the ground: +85.0", 1, true))
+world.indoors = false
+Tick(4)
 
 -- Fire underfoot.
 world.mapID, world.zoneText, world.hour = 1426, "Dun Morogh", 3
@@ -1145,6 +1166,7 @@ debugText = Slash("debug")
 check("debug shows fire", debugText:find("fire underfoot 1.00", 1, true), debugText)
 Tick(2)
 FireHit() -- still in it
+check("debug shows the beat of the fire", Slash("debug"):find("(fire hits 2.0 s apart)", 1, true))
 Tick(2)
 check("standing in fire stays scorching", Gauge.target == 100, Gauge.target)
 Tick(3)
@@ -1179,6 +1201,61 @@ world.combat = true
 FireHit()
 world.combat = false
 check("fire in combat ignored", Gauge.target == coldReading, Gauge.target)
+-- Lava in a fight, on hot ground: the second hit on its beat tells it from a spell, and the swim soaks nothing.
+world.mapID, world.zoneText = 1427, "Searing Gorge"
+Tick(1)
+local hotReading = Gauge.target
+check("searing gorge reading", hotReading == 85, hotReading)
+world.combat, world.swimming = true, true
+FireHit()
+Tick(2)
+check("one fire hit in the water in a fight is a spell", Gauge.target == hotReading, Gauge.target)
+check("debug says it may be lava", Slash("debug"):find("a fire hit in the water, lava if the next comes soon", 1, true))
+FireHit()
+check("lava in a fight burns", Gauge.target == 100, Gauge.target)
+Tick(2)
+FireHit()
+check("lava in a fight keeps burning", Gauge.target == 100, Gauge.target)
+world.combat, world.swimming = false, false
+Tick(10)
+check("lava in a fight leaves you dry", math.abs(Gauge.target - hotReading) < 0.01, Gauge.target)
+-- Two fire hits in the same moment in the water are one spell, not the lava beat.
+world.combat, world.swimming = true, true
+FireHit()
+FireHit()
+check("two fire hits at once in the water are no lava", Gauge.target == hotReading, Gauge.target)
+world.combat, world.swimming = false, false
+Tick(200)
+-- A fire hit long after the last one has no beat to show.
+FireHit()
+check("debug shows no gap between unrelated fire hits", not Slash("debug"):find("fire hits", 1, true))
+Tick(20)
+-- A fight that starts while you swim in lava changes nothing.
+world.swimming = true
+FireHit()
+Tick(2)
+world.combat = true
+FireHit()
+Tick(2)
+check("a fight that starts in lava keeps burning", Gauge.target == 100, Gauge.target)
+world.combat, world.swimming = false, false
+Tick(10)
+-- Away from hot ground a fire DoT in a lake is a spell at any beat, and the lake soaks.
+world.mapID, world.zoneText = 1426, "Dun Morogh"
+Tick(1)
+check("back in the cold", math.abs(Gauge.target - coldReading) < 0.01, Gauge.target)
+world.combat, world.swimming = true, true
+Tick(3)
+local lakeReading = Gauge.target
+for _ = 1, 3 do
+	FireHit()
+	Tick(2)
+end
+check("a fast fire DoT in a lake is no lava", Gauge.target == lakeReading and lakeReading < coldReading - 1, Gauge.target)
+check("a fire DoT in a lake leaves you soaked", Slash("debug"):find("wetness 1.00", 1, true))
+check("no lava guess in a lake", not Slash("debug"):find("lava if the next comes soon", 1, true))
+world.combat, world.swimming = false, false
+Tick(200)
 CoreEvent("UNIT_COMBAT", "player", "HEAL", "", 120, 4)
 CoreEvent("UNIT_COMBAT", "player", "WOUND", "", 0, 4)
 NextFrame()
@@ -1286,6 +1363,11 @@ ns = LoadAddon(false, { scale = 0.45 })
 check("retail keeps 0.45", FeelsLikeDB.scale == 0.45, FeelsLikeDB.scale)
 check("old save gets the race setting", FeelsLikeDB.race == true, FeelsLikeDB.race)
 check("old save gets the undead setting", FeelsLikeDB.undead == "numb", FeelsLikeDB.undead)
+-- Always cold of 0.2.0 is gone: the saved choice goes back to numb, so the settings show a real choice.
+ns = LoadAddon(true, { undead = "cold" })
+check("a saved always cold becomes numb", FeelsLikeDB.undead == "numb", FeelsLikeDB.undead)
+ns = LoadAddon(true, { undead = "living" })
+check("a saved like the living stays", FeelsLikeDB.undead == "living", FeelsLikeDB.undead)
 
 -- Humid air in Stranglethorn on a clear afternoon.
 ns = LoadAddon(true)
@@ -1446,6 +1528,26 @@ world.indoors, world.resting = true, true
 Tick(8)
 check("cozy inn line", #chatLines == 1 and LastLine() == "The warmth of the inn wraps around you.", LastLine())
 
+-- The undead do not breathe or sweat: their own weather lines, shared fire and Cozy lines.
+LoadQuietly()
+world.race, world.raceName = "Scourge", "Undead"
+FeelsLikeDB.undead = "living" -- feels like a human, still does not breathe
+GoMild()
+Tick(2)
+GoFreezing()
+Tick(4)
+check("undead freezing line", #chatLines == 1 and LastLine() == "The frost stiffens your dead joints.", LastLine())
+world.mapID, world.zoneText, world.hour = 1446, "Tanaris", 15
+world.weather = { type = 0, intensity = 0 }
+Tick(61)
+check("undead scorching line", #chatLines == 2 and LastLine() == "The heat is unbearable, even for the dead.", LastLine())
+world.mapID, world.zoneText, world.hour = 1429, "Elwynn Forest", 15
+world.indoors, world.resting = true, true
+Tick(61)
+check("undead share the cozy lines", #chatLines == 3 and LastLine() == "The warmth of the inn wraps around you.", LastLine())
+world.indoors, world.resting = false, false
+world.race, world.raceName = "Human", "Human"
+
 -- Dead: the same cold everywhere until you are back.
 ns = LoadAddon(true)
 world.dead = true
@@ -1500,16 +1602,16 @@ check("undead still cold", math.abs(RaceTarget("Scourge", "Undead") - (-44)) < 0
 debugText = Slash("debug")
 check("debug adds the local name", debugText:find("race Scourge (Undead), numb, cold x0.50, heat x0.60: +44.0", 1, true), debugText)
 -- The undead choose how they feel.
-FeelsLikeDB.undead = "cold"
-check("undead always cold", math.abs(RaceTarget("Scourge", "Undead") - (-75.2)) < 0.01, ns.Gauge.target)
-debugText = Slash("debug")
-check("debug says always cold", debugText:find("race Scourge (Undead), always cold, cold x0.40, heat x0.40, shift -40: +12.8", 1, true), debugText)
 FeelsLikeDB.undead = "living"
 check("undead like the living", math.abs(RaceTarget("Scourge", "Undead") - (-88)) < 0.01, ns.Gauge.target)
 check("debug says like the living", Slash("debug"):find("race Scourge (Undead), like the living, cold x1.00, heat x1.00: +0.0", 1, true))
 FeelsLikeDB.undead = "zombie"
 check("a bad undead value is numb", math.abs(RaceTarget("Scourge", "Undead") - (-44)) < 0.01, ns.Gauge.target)
+-- Always cold of 0.2.0 is gone: a saved choice reads as numb.
 FeelsLikeDB.undead = "cold"
+check("always cold of 0.2.0 is numb now", math.abs(RaceTarget("Scourge", "Undead") - (-44)) < 0.01, ns.Gauge.target)
+check("debug says numb for the old choice", Slash("debug"):find("race Scourge (Undead), numb, cold x0.50, heat x0.60", 1, true))
+FeelsLikeDB.undead = "living"
 check("the undead choice leaves dwarves alone", math.abs(RaceTarget("Dwarf") - (-66)) < 0.01, ns.Gauge.target)
 FeelsLikeDB.race = false
 check("race off wins over the undead choice", math.abs(RaceTarget("Scourge", "Undead") - (-88)) < 0.01, ns.Gauge.target)
@@ -1556,7 +1658,7 @@ end
 check("cat form has fur", math.abs(FormTarget(1) - (-66)) < 0.01, ns.Gauge.target)
 debugText = Slash("debug")
 check("debug shows the fur form", debugText:find("race NightElf (Night Elf), in Cat Form (fur), cold x0.75, heat x1.15: +22.0", 1, true), debugText)
-for _, form in ipairs({ 3, 5, 8, 31 }) do
+for _, form in ipairs({ 3, 4, 5, 8, 31 }) do
 	check("fur form " .. form, math.abs(FormTarget(form) - (-66)) < 0.01, ns.Gauge.target)
 end
 check("a tauren bear feels like a tauren", math.abs(FormTarget(5, "Tauren") - (-66)) < 0.01, ns.Gauge.target)
@@ -1608,11 +1710,6 @@ Tick(2)
 check("a fireball fades", ns.Gauge.target > -44 and ns.Gauge.target < 100, ns.Gauge.target)
 Tick(2)
 check("a fireball faded", math.abs(ns.Gauge.target - (-44)) < 0.01, ns.Gauge.target)
-FeelsLikeDB.undead = "cold"
-Tick(1)
-FireHit()
-check("a fireball scorches undead that run cold", math.abs(ns.Gauge.target - 100) < 0.01, ns.Gauge.target)
-Tick(5)
 FeelsLikeDB.undead = "living"
 Tick(1)
 FireHit()

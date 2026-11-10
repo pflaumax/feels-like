@@ -9,6 +9,13 @@ end
 -- Places that are fully inside, like Ironforge and Undercity. Shelter and inns do not apply there.
 local INSIDE = true
 
+-- A place with hot water: a swim there chills nothing. Wet clothes chill again on the shore.
+local function HotSpring(base, climate)
+	local zone = Zone(base, climate)
+	zone.hotWater = true
+	return zone
+end
+
 ns.Zones = {}
 
 ns.Zones.forever = {
@@ -34,7 +41,7 @@ ns.Zones.forever = {
 	[1454] = Zone(25, "arid"), -- Orgrimmar
 	[1456] = Zone(10, "temperate"), -- Thunder Bluff
 	[1457] = Zone(0, "temperate"), -- Darnassus
-	[2482] = Zone(-30, "snow"), -- Mount Hyjal
+	[2482] = Zone(-45, "snow"), -- Mount Hyjal
 	[2652] = Zone(10, "temperate"), -- Shen'dralas
 
 	-- Eastern Kingdoms
@@ -85,14 +92,14 @@ ns.Zones.retail = {
 
 -- Subzone overrides per area ID.
 ns.Zones.subzones = {
-	[2246] = Zone(10, "snow"), -- Frostfire Hot Springs
+	[2246] = HotSpring(10, "snow"), -- Frostfire Hot Springs
 	[439] = Zone(55, "desert"), -- The Shimmering Flats
 	[509] = Zone(60, "volcanic"), -- The Den of Flame
-	[543] = Zone(70, "tropical"), -- Golakka Hot Springs
+	[543] = HotSpring(60, "tropical"), -- Golakka Hot Springs
 	[254] = Zone(90, "volcanic"), -- Blackrock Mountain
 	[1445] = Zone(90, "volcanic"), -- Blackrock Mountain
 	[16513] = Zone(90, "volcanic"), -- Blackrock Mountain
 	[537] = Zone(90, "volcanic"), -- Fire Plume Ridge
-	[246] = Zone(100, "volcanic"), -- The Cauldron
+	[246] = Zone(95, "volcanic"), -- The Cauldron
 	[5342] = Zone(45, "none", INSIDE), -- The Great Forge
 }

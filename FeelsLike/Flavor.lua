@@ -51,6 +51,29 @@ local LINES = {
 		"It is good to be inside.",
 	},
 }
+-- The undead do not breathe, sweat or shiver, so the weather lines are their own. The rest are shared.
+local UNDEAD_LINES = {
+	Freezing = {
+		"The frost stiffens your dead joints.",
+		"Ice creeps over your cold flesh.",
+		"Even the dead feel this cold.",
+	},
+	Cold = {
+		"A chill settles in your bones.",
+		"No breath steams from your lips, but the cold is there.",
+		"Your stiff fingers ache from the cold.",
+	},
+	Hot = {
+		"The heat dries your dead skin.",
+		"No sweat comes, only the heat.",
+		"You look for a bit of shade.",
+	},
+	Scorching = {
+		"The heat is unbearable, even for the dead.",
+		"Your dry flesh cracks in the heat.",
+		"You feel like you are in an oven.",
+	},
+}
 local NAMES = {
 	burning = "Scorching from fire underfoot",
 	cozyFire = "Cozy by a fire",
@@ -86,7 +109,8 @@ function Flavor.OnLogin(now)
 end
 
 -- Called after every reading. held keeps the line for later (combat, a test, a ghost); off drops it.
-function Flavor.OnReading(result, now, held, off)
+-- undead picks the lines of a body that does not breathe.
+function Flavor.OnReading(result, now, held, off, undead)
 	local key = LinesFor(result)
 	quietUntil = quietUntil or now + LOGIN_QUIET
 	if key ~= current then
@@ -108,9 +132,9 @@ function Flavor.OnReading(result, now, held, off)
 	end
 	done = true
 	spokenAt[key], lastKey, lastLineAt = now, key, now
-	local lines = LINES[key]
-	local index = turn[key] or 1
-	turn[key] = index % #lines + 1
+	local lines = undead and UNDEAD_LINES[key] or LINES[key]
+	local index = (turn[key] or 0) % #lines + 1
+	turn[key] = index
 	Say(lines[index])
 end
 
