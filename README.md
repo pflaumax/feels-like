@@ -40,7 +40,7 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see its status, one word next to it like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy, and a tooltip that says why, like "Why: a cold place, snow".
 
-Now and then your character reacts with a short line in chat that only you see, like "A chill runs down your back." when the cold sets in, or "You warm your hands by the fire." There are lines for wet clothes, rain, a torch and a drink too. The undead have their own lines, because they don't breathe or sweat, and so do bodies with fur. It never repeats itself often and stays quiet in combat.
+Now and then your character reacts with a short line in chat that only you see, like "A chill runs down your back." when the cold sets in, or "You warm your hands by the fire." There are lines for wet clothes, rain, snow, a torch and a drink too. The undead have their own lines, because they don't breathe or sweat, and so do bodies with fur. It never repeats itself often and stays quiet in combat.
 
 The gauge sits by the minimap. Hold Shift and drag it to move it anywhere you like.
 
