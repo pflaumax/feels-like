@@ -5,6 +5,7 @@ local addonName, ns = ...
 ns.DEFAULTS = {
 	unit = "C",
 	label = "hover",
+	tooltip = true,
 	locked = false,
 	race = true,
 	undead = "numb",
@@ -42,9 +43,20 @@ local DRINK_FORGET = 2 * 60 * 60
 local DRUNK_NAMES = { "tipsy", "drunk", "completely smashed" }
 
 local wetness = 0
+-- How warm the fight has made you, from 0 to 1.
+local exertion = 0
 -- The saved drink, until the game says whether this load is a /reload.
 local drinkBeforeReload
 local lastState, lastResult
+-- The reasons of the last reading, worked out only when a tooltip asks for them.
+local reasonsOf, colderNow, warmerNow
+local function Reasons()
+	if reasonsOf ~= lastResult then
+		colderNow, warmerNow = ns.Model.Reasons(lastState, lastResult)
+		reasonsOf = lastResult
+	end
+	return colderNow, warmerNow
+end
 local lastUpdate
 -- While a test runs, real readings do not move the gauge.
 local test
@@ -66,12 +78,12 @@ local function OpenSettings()
 end
 
 -- Changes the language of the word, the tooltip, the panel feed and the lines in chat at once.
--- The settings page keeps its texts until a /reload.
+-- The settings page keeps its texts until a reload, so a window offers one.
 function ns.SetLanguage(language)
 	ns.Locale.Set(language)
 	ns.Gauge:Refresh()
 	ns.Broker.Refresh()
-	Print(ns.T("type /reload to change the settings page too."))
+	ns.Options:OfferReload()
 end
 
 -- Version of the saved settings.
@@ -150,11 +162,16 @@ local function Update()
 	if lastState and not lastState.dead then
 		wetness = ns.Model.UpdateWetness(wetness, now - lastUpdate, lastState, lastResult.drying)
 	end
+	-- A fight warms you up, and you cool down after it.
+	if lastUpdate then
+		exertion = ns.Model.UpdateExertion(exertion, now - lastUpdate, InCombatLockdown())
+	end
 	lastUpdate = now
 
 	local state = ns.Sensors.Read()
 	state.body = ChooseBody(state)
 	state.drunk = Drunk(now)
+	state.exertion = exertion
 	state.seasonsOff = not FeelsLikeDB.seasons
 	local result = ns.Model.Compute(state, wetness)
 	lastState, lastResult = state, result
@@ -162,9 +179,8 @@ local function Update()
 		ns.Gauge:SetTarget(result.target)
 		ns.Gauge:SetCozy(result.cozy)
 	end
-	local colder, warmer = ns.Model.Reasons(state, result)
-	ns.Gauge:SetReasons(colder, warmer, test ~= nil)
-	ns.Broker.Update(result.target, result.cozy, colder, warmer)
+	ns.Gauge:SetReasons(Reasons, test ~= nil)
+	ns.Broker.Update(result.target, result.cozy, Reasons)
 	-- The character's own reaction, now and then. Combat or a test holds it back for later. A ghost's cold is
 	-- no news, so the lines wait for the real reading.
 	if not state.dead then
@@ -204,6 +220,8 @@ local function StartTest(value, cozy)
 	test = { value = value, cozy = cozy }
 	ns.Gauge:SetTarget(value)
 	ns.Gauge:SetCozy(cozy)
+	-- An open tooltip says at once that a test runs.
+	ns.Gauge:SetReasons(nil, true)
 end
 
 local function StopTest()
@@ -337,6 +355,7 @@ local function PrintDebug()
 		drink = string.format("%s (%d min)", DRUNK_NAMES[s.drunk], math.floor((GetTime() - FeelsLikeDB.drink.at) / 60))
 	end
 	print(string.format("  drink %s: %s", drink, Signed(r.drink)))
+	print(string.format("  fight %.2f: %s", s.exertion, Signed(r.fight)))
 	local fireSpells = ""
 	if s.body and s.body.fireSpells then
 		fireSpells = string.format(", fire spells %.2f (undead)", s.fireSpell)
@@ -518,8 +537,9 @@ EventUtil.ContinueOnAddOnLoaded(addonName, function()
 					end
 				end)
 			elseif ns.Sensors.IsFrostHit(action, amount, schoolMask) then
-				ns.Sensors.OnFrostHit()
-				Update()
+				if ns.Sensors.OnFrostHit() then
+					Update()
+				end
 			end
 			return
 		elseif event == "CHAT_MSG_SYSTEM" then

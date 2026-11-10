@@ -1,4 +1,5 @@
 -- Dial drawn from SVG layers, sharp at any size. The needle has 91 rotated files switched by alpha, so it does not blink.
+-- Between two of them the needle is both: the nearer one solid and the other one fading, so it glides.
 
 local addonName, ns = ...
 local Model = ns.Model
@@ -8,6 +9,8 @@ ns.DialVector = DialVector
 
 local MEDIA = "Interface\\AddOns\\" .. addonName .. "\\Media\\"
 local NEEDLE_STEPS = 90
+-- A second needle fainter than this is not drawn. It also keeps a needle at rest alone.
+local FADE_MIN = 0.02
 
 -- Sets alpha, or shows and hides if SetAlpha is missing.
 local function SetLayerAlpha(layer, alpha)
@@ -80,11 +83,25 @@ function DialVector.Create(frame)
 		return nil
 	end
 
-	local needleStep = math.floor(NEEDLE_STEPS / 2 + 0.5)
+	local middle = math.floor(NEEDLE_STEPS / 2 + 0.5)
 	for step = 0, NEEDLE_STEPS do
-		SetLayerAlpha(needles[step], step == needleStep and 1 or 0)
+		SetLayerAlpha(needles[step], step == middle and 1 or 0)
+	end
+	-- The needles that show now, with their alpha.
+	local shownNeedles = { [middle] = 1 }
+	local function ShowNeedle(step, alpha)
+		if shownNeedles[step] ~= alpha then
+			SetLayerAlpha(needles[step], alpha)
+			shownNeedles[step] = alpha
+		end
 	end
 	local dial = { name = "vector" }
+
+	-- Where the needle comes to rest for a reading: on the nearest needle file, so only one needle shows.
+	function dial:Rest(t)
+		local step = math.floor(Model.Fraction(t) * NEEDLE_STEPS + 0.5)
+		return Model.MIN + (Model.MAX - Model.MIN) * step / NEEDLE_STEPS
+	end
 
 	-- Cold and hot layers start hidden.
 	local shownCold, shownHot = 0, 0
@@ -95,16 +112,31 @@ function DialVector.Create(frame)
 		SetLayerAlpha(ringClassic, 0)
 	end
 
-	function dial:Render(t)
-		local step = math.floor(Model.Fraction(t) * NEEDLE_STEPS + 0.5)
-		if step ~= needleStep then
-			-- Show the new needle before hiding the old one.
-			SetLayerAlpha(needles[step], 1)
-			SetLayerAlpha(needles[needleStep], 0)
-			needleStep = step
+	-- t is where the needle is. glow is the reading the ring and the face show, t if not given.
+	function dial:Render(t, glow)
+		-- The nearer needle is solid, so the pivot never shows through. The other one fades in toward the
+		-- middle between them and out again.
+		local position = Model.Fraction(t) * NEEDLE_STEPS
+		local near = math.floor(position + 0.5)
+		local offset = position - near
+		local other = offset > 0 and near + 1 or near - 1
+		local otherAlpha = math.abs(offset) * 2
+		if otherAlpha < FADE_MIN or other < 0 or other > NEEDLE_STEPS then
+			other = nil
+		end
+		-- Show the new needles before hiding the old ones.
+		ShowNeedle(near, 1)
+		if other then
+			ShowNeedle(other, otherAlpha)
+		end
+		for step in pairs(shownNeedles) do
+			if step ~= near and step ~= other then
+				SetLayerAlpha(needles[step], 0)
+				shownNeedles[step] = nil
+			end
 		end
 
-		local cold, hot = Model.Extremes(t)
+		local cold, hot = Model.Extremes(glow or t)
 		if cold ~= shownCold then
 			SetLayerAlpha(faceCold, cold)
 			SetLayerAlpha(ringIcy, cold)

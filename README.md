@@ -30,13 +30,15 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 **Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either, but they fear fire: a fire spell in a fight scorches them for a moment. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
 
+**Fight.** A fight warms you up a little. The warmth builds over the first seconds and fades when the fight is over. Like a fire, it makes you warm but never hot.
+
 **Drink.** Get tipsy and a cold night feels a little warmer. The more you drink, the warmer, but never past Mild, and the heat stays the same. The addon follows the game's own lines like "You feel tipsy. Whee!", so it works in every language.
 
 **Death.** While you are dead, a ghost or a wisp, you feel Cold, the same everywhere, until you are back.
 
 ## Reading the gauge
 
-Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see one word next to it, like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy, and a tooltip that says what makes you colder or warmer right now.
+Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see its status, one word next to it like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy, and a tooltip that says why, like "Why: a cold place, snow".
 
 Now and then your character reacts with a short line in chat that only you see, like "A chill runs down your back." when the cold sets in, or "You warm your hands by the fire." There are lines for wet clothes, rain, a torch and a drink too. The undead have their own lines, because they don't breathe or sweat, and so do bodies with fur. It never repeats itself often and stays quiet in combat.
 
@@ -47,7 +49,8 @@ The gauge sits by the minimap. Hold Shift and drag it to move it anywhere you li
 Open Options, then AddOns, then Feels Like. You can
 
 - switch between Celsius and Fahrenheit
-- show the word on hover, always or never
+- show the status word on hover, always or never
+- turn the tooltip on hover on or off
 - choose whether your race changes how you feel
 - choose how the undead feel: numb or like the living
 - turn seasons and holidays on or off
@@ -86,7 +89,7 @@ Open Options, then AddOns, then Feels Like. You can
 
 **Does it work with Titan Panel?** Yes. With Titan Panel, ChocolateBar or any other panel that shows LibDataBroker feeds, Feels Like puts its word there too. Hover it for the reasons and click it for the settings.
 
-**Which languages?** English and Ukrainian. Pick the language in the settings: it changes the word, the tooltip and the lines in chat at once, and the settings page after a `/reload`. `/feels debug` stays English. Want another language? Send me the translated lines.
+**Which languages?** English and Ukrainian. Pick the language in the settings: it changes the word, the tooltip and the lines in chat at once. The settings page changes after a reload, and a window offers one right away. `/feels debug` stays English. Want another language? Send me the translated lines.
 
 **Which versions of the game?** It's made for WoW Forever. It also loads on Retail, but there only a few old zones have a climate, so most places read as Mild.
 

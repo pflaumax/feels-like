@@ -9,6 +9,8 @@ ns.Options = Options
 local SCALE_MIN = 0.3
 local SCALE_MAX = 2
 local SCALE_STEP = 0.01
+-- The window that offers a reload after the language changed.
+local RELOAD_POPUP = "FEELSLIKE_RELOAD"
 
 local function UnitOptions()
 	local container = Settings.CreateControlTextContainer()
@@ -58,17 +60,25 @@ function Options:Register(db)
 	Settings.CreateDropdown(category, unit, UnitOptions, T("Unit symbol inside the gauge."))
 
 	local label = Settings.RegisterAddOnSetting(category, "FEELSLIKE_LABEL", "label", db,
-		Settings.VarType.String, T("Show word"), defaults.label)
+		Settings.VarType.String, T("Show status"), defaults.label)
 	label:SetValueChangedCallback(function(_, value)
 		ns.Gauge:SetLabelMode(value)
 	end)
 	Settings.CreateDropdown(category, label, LabelOptions,
-		T("One word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."))
+		T("The status is one word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."))
+
+	local tooltip = Settings.RegisterAddOnSetting(category, "FEELSLIKE_TOOLTIP", "tooltip", db,
+		Settings.VarType.Boolean, T("Tooltip on hover"), defaults.tooltip)
+	tooltip:SetValueChangedCallback(function(_, value)
+		ns.Gauge:SetTooltip(value)
+	end)
+	Settings.CreateCheckbox(category, tooltip,
+		T("On: hover the gauge for a tooltip with the status and why it is so. Off: no tooltip, only the status word as set above."))
 
 	local race = Settings.RegisterAddOnSetting(category, "FEELSLIKE_RACE", "race", db,
 		Settings.VarType.Boolean, T("Feel by race"), defaults.race)
 	Settings.CreateCheckbox(category, race,
-		T("Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren."))
+		T("Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren. It shows in cold and hot places: a mild place feels almost the same to everyone."))
 
 	local undead = Settings.RegisterAddOnSetting(category, "FEELSLIKE_UNDEAD", "undead", db,
 		Settings.VarType.String, T("Undead feel"), defaults.undead)
@@ -91,7 +101,7 @@ function Options:Register(db)
 		ns.SetLanguage(value)
 	end)
 	Settings.CreateDropdown(category, language, LanguageOptions,
-		T("The language of the word, the tooltip and the lines in chat. Type /reload to change this page too."))
+		T("The language of the status, the tooltip and the lines in chat. They change at once. This page changes after a reload of the interface, and the addon offers one."))
 
 	local locked = Settings.RegisterAddOnSetting(category, "FEELSLIKE_LOCKED", "locked", db,
 		Settings.VarType.Boolean, T("Lock position"), defaults.locked)
@@ -115,6 +125,35 @@ function Options:Register(db)
 
 	Settings.RegisterAddOnCategory(category)
 	self.category = category
+	-- The page keeps the language it was built in until a reload.
+	self.language = ns.Locale.language
+end
+
+-- After the language changed: the settings page still shows the old one, so offer a reload in a window.
+-- Back to the language of the page, the window goes away.
+function Options:OfferReload()
+	if not (StaticPopupDialogs and StaticPopup_Show) then
+		ns.Print(T("type /reload to change the settings page too."))
+		return
+	elseif ns.Locale.language == self.language then
+		StaticPopup_Hide(RELOAD_POPUP)
+		return
+	end
+	-- Built again each time, so it speaks the new language.
+	StaticPopupDialogs[RELOAD_POPUP] = {
+		text = T("Feels Like: the language changed. The status, the tooltip and the lines in chat have changed already. The settings page changes after a reload of the interface. Reload now?"),
+		button1 = T("Reload"),
+		button2 = T("Later"),
+		OnAccept = function()
+			ReloadUI()
+		end,
+		timeout = 0,
+		whileDead = true,
+		hideOnEscape = true,
+		preferredIndex = 3,
+	}
+	StaticPopup_Hide(RELOAD_POPUP)
+	StaticPopup_Show(RELOAD_POPUP)
 end
 
 function Options:Open()

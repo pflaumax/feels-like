@@ -40,6 +40,8 @@ local function Widget()
 	widget.GetEffectiveScale = function() return 1 end
 	widget.GetWidth = function() return 198 end
 	widget.SetAlpha = function(self, alpha) self.alpha = alpha end
+	widget.GetFont = function() return "Fonts\\FRIZQT__.TTF", 10, "" end
+	widget.SetFont = function(self, file, size, flags) self.font = { file, size, flags } end
 	widget.SetSVG = function(self, path) self.svg = path return svg.result and not svg.missing[path:match("[^\\]+$")] end
 	-- false, not nil, so the method is really missing.
 	widget.CreateVectorGraphics = svg.supported and function()
@@ -111,9 +113,14 @@ local function InstallGlobals(forever)
 	_G.GameTooltip.IsOwned = function() return false end
 	-- The tooltip keeps its lines, the title first.
 	_G.GameTooltip.lines = {}
-	_G.GameTooltip.SetOwner = function(self, owner) self.owner, self.lines = owner, {} end
+	_G.GameTooltip.SetOwner = function(self, owner, anchor) self.owner, self.anchor, self.lines = owner, anchor, {} end
 	_G.GameTooltip.SetText = function(self, text) self.lines[1] = text end
 	_G.GameTooltip.AddLine = function(self, text) self.lines[#self.lines + 1] = text end
+	-- The window that offers a reload.
+	_G.StaticPopupDialogs = {}
+	_G.StaticPopup_Show = function(name) world.popup = name end
+	_G.StaticPopup_Hide = function(name) if world.popup == name then world.popup = nil end end
+	_G.ReloadUI = function() world.reloaded = true end
 	_G.CreateFrame = function(_, name)
 		local frame = Widget()
 		createdFrames[#createdFrames + 1] = frame
@@ -333,22 +340,76 @@ for _, layer in ipairs(vectorLayers) do
 		needleFiles[layer] = layer.svg
 	end
 end
-local alwaysOneNeedle, filesNeverReloaded = true, true
-for _ = 1, 60 do
+-- Every needle that shows at all, solid or fading, as step numbers.
+local function ShownNeedles()
+	local solid, fading = {}, {}
+	for _, layer in ipairs(vectorLayers) do
+		if layer.svg and layer.svg:find("Needle", 1, true) and layer.alpha > 0 then
+			local list = layer.alpha == 1 and solid or fading
+			list[#list + 1] = tonumber(layer.svg:match("(%d%d)%.svg$"))
+		end
+	end
+	return solid, fading
+end
+local neverGone, neighboursOnly, sawFading, filesNeverReloaded = true, true, false, true
+local lowest = Gauge.display
+for _ = 1, 200 do
 	local onUpdate = gaugeFrame.scripts.OnUpdate
 	if not onUpdate then break end -- removed once the needle settles
-	onUpdate(gaugeFrame, 0.05)
-	alwaysOneNeedle = alwaysOneNeedle and #VisibleNeedles() == 1
+	onUpdate(gaugeFrame, 0.02)
+	lowest = math.min(lowest, Gauge.display)
+	local solid, fading = ShownNeedles()
+	-- One needle is always solid. At most one more shows, right next to it.
+	neverGone = neverGone and #solid >= 1
+	local all = {}
+	for _, step in ipairs(solid) do all[#all + 1] = step end
+	for _, step in ipairs(fading) do all[#all + 1] = step end
+	neighboursOnly = neighboursOnly and #all <= 2 and (#all == 1 or math.abs(all[1] - all[2]) == 1)
+	sawFading = sawFading or #fading == 1
 	for layer, file in pairs(needleFiles) do
 		filesNeverReloaded = filesNeverReloaded and layer.svg == file
 	end
 end
-check("exactly one needle visible during the glide", alwaysOneNeedle)
+check("a solid needle shows all through the glide", neverGone)
+check("at most two needles, side by side", neighboursOnly)
+check("the needle glides between two steps", sawFading)
 check("needle layers never load a new file", filesNeverReloaded)
 check("needle stops updating once settled", gaugeFrame.scripts.OnUpdate == nil)
-check("needle settled", Gauge.display == Gauge.target, Gauge.display)
+-- It rests on the step nearest the reading, so only one needle shows.
+check("needle settled on the nearest step", math.abs(Gauge.display - (-100 + 200 * 5 / 90)) < 1e-9
+	and math.abs(Gauge.display - Gauge.target) <= 200 / 90 / 2, Gauge.display)
+check("the needle swings a little past the reading", lowest < Gauge.display - 2 and lowest > Gauge.display - 9, lowest)
+local solidAtRest, fadingAtRest = ShownNeedles()
+check("one needle at rest", #solidAtRest == 1 and #fadingAtRest == 0, #solidAtRest .. " " .. #fadingAtRest)
 check("needle at step 05", VisibleNeedles()[1] == "05", table.concat(VisibleNeedles(), ","))
+-- The glow shows the reading itself, not the step the needle rests on.
 check("icy ring shown", ringIcy.alpha and math.abs(ringIcy.alpha - 0.6) < 0.01, ringIcy.alpha)
+check("the word has a dark outline", fontStrings.GameFontHighlightSmall.font and fontStrings.GameFontHighlightSmall.font[3] == "OUTLINE")
+-- A needle that swings past the reading lights no ring the reading does not reach.
+Slash("test 82")
+local hotRing, flashed = LayerBySvg("ring_hot.svg"), false
+for _ = 1, 200 do
+	local onUpdate = gaugeFrame.scripts.OnUpdate
+	if not onUpdate then break end
+	onUpdate(gaugeFrame, 0.02)
+	flashed = flashed or hotRing.alpha > 0
+end
+check("the needle swings past 82", gaugeFrame.scripts.OnUpdate == nil)
+check("the hot ring stays dark below Scorching", not flashed, hotRing.alpha)
+Slash("test 100")
+for _ = 1, 200 do
+	local onUpdate = gaugeFrame.scripts.OnUpdate
+	if not onUpdate then break end
+	onUpdate(gaugeFrame, 0.02)
+end
+check("the hot ring glows at the top", hotRing.alpha == 1, hotRing.alpha)
+Slash("test off")
+for _ = 1, 300 do
+	local onUpdate = gaugeFrame.scripts.OnUpdate
+	if not onUpdate then break end
+	onUpdate(gaugeFrame, 0.02)
+end
+check("the hot ring is dark again in the cold", hotRing.alpha == 0 and math.abs(ringIcy.alpha - 0.6) < 0.01, hotRing.alpha)
 check("hot face hidden", faceHot.alpha == 0, faceHot.alpha)
 ns.Gauge:SetUnit("F")
 check("unit svg", unitLayer.svg:find("unit_f.svg", 1, true), unitLayer.svg)
@@ -525,10 +586,14 @@ world.shift = false
 check("mouse on while label shows on hover", gauge.mouse == true)
 FeelsLikeDB.label = "never"
 ns.Gauge:SetLabelMode("never")
-check("locked without label lets clicks through", gauge.mouse == false)
+check("locked with the tooltip on keeps the mouse for it", gauge.mouse == true)
+settings.FEELSLIKE_TOOLTIP.callback(nil, false)
+check("locked without label and tooltip lets clicks through", gauge.mouse == false)
 FeelsLikeDB.label = "always"
 ns.Gauge:SetLabelMode("always")
-check("locked with the word always shown lets clicks through", gauge.mouse == false)
+check("locked with the word always shown and no tooltip lets clicks through", gauge.mouse == false)
+settings.FEELSLIKE_TOOLTIP.callback(nil, true)
+check("the tooltip setting turns the mouse back on", gauge.mouse == true)
 FeelsLikeDB.locked, FeelsLikeDB.label = false, "hover"
 ns.Gauge:SetLocked(false)
 ns.Gauge:SetLabelMode("hover")
@@ -551,18 +616,30 @@ Tick(2)
 gauge.scripts.OnEnter()
 check("tooltip shown on hover", GameTooltip.shown == true and GameTooltip.owner == gauge)
 check("tooltip names the word and the reasons",
-	TooltipText() == "Freezing | Colder: a cold place, snow, the night | Shift-drag to move", TooltipText())
+	TooltipText() == "Freezing | Why: |cff8fd9f0a cold place, snow, the night|r | Shift-drag to move", TooltipText())
 GameTooltip.lines = {}
 Tick(1)
 check("an open tooltip with nothing new is left alone", #GameTooltip.lines == 0, #GameTooltip.lines)
 world.weather = { type = 0, intensity = 0 }
 Tick(1)
 check("tooltip follows the reading while it is open",
-	TooltipText() == "Freezing | Colder: a cold place, the night | Shift-drag to move", TooltipText())
+	TooltipText() == "Freezing | Why: |cff8fd9f0a cold place, the night|r | Shift-drag to move", TooltipText())
 Slash("test 50")
+check("tooltip says a test runs at once", TooltipText():find("Hot | A test value", 1, true), TooltipText())
 Tick(1)
 check("tooltip says a test runs", TooltipText():find("Hot | A test value", 1, true), TooltipText())
 Slash("test off")
+-- The tooltip can be turned off in the settings. The word next to the gauge stays.
+settings.FEELSLIKE_TOOLTIP.callback(nil, false)
+check("tooltip off hides an open tooltip", GameTooltip.shown == false and FeelsLikeDB.tooltip == false)
+gauge.scripts.OnLeave()
+GameTooltip.lines = {}
+gauge.scripts.OnEnter()
+Tick(1)
+check("no tooltip on hover while it is off", #GameTooltip.lines == 0 and GameTooltip.shown == false, #GameTooltip.lines)
+check("the word still shows on hover", fontStrings.GameFontHighlightSmall.shown == true)
+settings.FEELSLIKE_TOOLTIP.callback(nil, true)
+check("tooltip on shows it again at once", GameTooltip.shown == true and #GameTooltip.lines > 1, #GameTooltip.lines)
 gauge.scripts.OnLeave()
 check("tooltip hidden off the gauge", GameTooltip.shown == false)
 GameTooltip.lines = {}
@@ -573,9 +650,11 @@ world.mapID, world.zoneText, world.hour, world.weather = before[1], before[2], b
 -- Hover state does not stick when the mouse is off.
 gauge.scripts.OnEnter()
 FeelsLikeDB.locked, FeelsLikeDB.label = true, "never"
+settings.FEELSLIKE_TOOLTIP.callback(nil, false)
 ns.Gauge:SetLocked(true)
 ns.Gauge:SetLabelMode("never")
 FeelsLikeDB.locked, FeelsLikeDB.label = false, "hover"
+settings.FEELSLIKE_TOOLTIP.callback(nil, true)
 ns.Gauge:SetLocked(false)
 ns.Gauge:SetLabelMode("hover")
 check("hover does not stick", label.shown == false)
@@ -1283,7 +1362,7 @@ Tick(2)
 FireHit()
 check("lava in a fight keeps burning", Gauge.target == 100, Gauge.target)
 world.combat, world.swimming = false, false
-Tick(10)
+Tick(40) -- the warmth of the fight is gone by then
 check("lava in a fight leaves you dry", math.abs(Gauge.target - hotReading) < 0.01, Gauge.target)
 -- Two fire hits in the same moment in the water are one spell, not the lava beat.
 world.combat, world.swimming = true, true
@@ -1339,13 +1418,13 @@ world.mapID, world.zoneText = 1426, "Dun Morogh"
 Tick(1)
 check("back in the cold", math.abs(Gauge.target - coldReading) < 0.01, Gauge.target)
 world.combat, world.swimming = true, true
-Tick(3)
+Tick(10) -- soaked, and as warm as the fight makes you
 local lakeReading = Gauge.target
 for _ = 1, 3 do
 	FireHit()
 	Tick(2)
 end
-check("a fast fire DoT in a lake is no lava", Gauge.target == lakeReading and lakeReading < coldReading - 1, Gauge.target)
+check("a fast fire DoT in a lake is no lava", math.abs(Gauge.target - lakeReading) < 0.01 and lakeReading < 0, Gauge.target)
 check("a fire DoT in a lake leaves you soaked", Slash("debug"):find("wetness 1.00", 1, true))
 check("no lava guess in a lake", not Slash("debug"):find("lava if the next comes soon", 1, true))
 world.combat, world.swimming = false, false
@@ -1735,13 +1814,13 @@ check("panel feed shows the colored word", feed and feed.text == "|cff6e9bffFree
 GoMild()
 world.hour = 15
 Tick(1)
-check("panel feed follows the reading", feed and feed.text == "|cffc8d3dcMild|r", feed and feed.text)
+check("panel feed follows the reading", feed and feed.text == "|cffdcdcdcMild|r", feed and feed.text)
 Slash("test -90")
-check("panel feed keeps the real reading in a test", feed and feed.text == "|cffc8d3dcMild|r", feed and feed.text)
+check("panel feed keeps the real reading in a test", feed and feed.text == "|cffdcdcdcMild|r", feed and feed.text)
 Slash("test off")
 local panelLines = {}
 feed.OnTooltipShow({ AddLine = function(_, text) panelLines[#panelLines + 1] = text end })
-check("panel tooltip", table.concat(panelLines, " | ") == "Feels Like | Mild | Warmer: the sun, a warm place | Click to open the settings",
+check("panel tooltip", table.concat(panelLines, " | ") == "Feels Like | Mild | Why: |cfff5a345the sun, a warm place|r | Click to open the settings",
 	table.concat(panelLines, " | "))
 settings.opened = nil
 feed.OnClick()
@@ -1758,7 +1837,7 @@ check("ukrainian word next to the gauge", fontStrings.GameFontHighlightSmall.tex
 local ukGauge = _G.FeelsLikeGauge
 ukGauge.scripts.OnEnter()
 check("ukrainian tooltip", table.concat(GameTooltip.lines, " | ")
-	== "Морозно | Холодніше: холодне місце, сніг, ніч | Shift + перетягування, щоб пересунути", table.concat(GameTooltip.lines, " | "))
+	== "Морозно | Чому: |cff8fd9f0холодне місце, сніг, ніч|r | Shift + тягни, щоб пересунути", table.concat(GameTooltip.lines, " | "))
 ukGauge.scripts.OnLeave()
 GoMild()
 Tick(2)
@@ -1778,9 +1857,33 @@ check("the api word stays english", apiWord == "Freezing", apiWord)
 printed = {}
 settings.FEELSLIKE_LANGUAGE.callback(nil, "en")
 check("english word at once", fontStrings.GameFontHighlightSmall.text == "Freezing", fontStrings.GameFontHighlightSmall.text)
-check("the settings page needs a reload", printed[1] and printed[1]:find("type /reload to change the settings page too", 1, true), printed[1])
+-- The settings page was built in Ukrainian, so a window offers a reload, in the new language.
+local popup = StaticPopupDialogs.FEELSLIKE_RELOAD
+check("a window offers a reload", world.popup == "FEELSLIKE_RELOAD" and popup ~= nil and popup.button1 == "Reload"
+	and popup.text:find("Reload now?", 1, true) ~= nil, world.popup)
+check("nothing in chat about it", printed[1] == nil, printed[1])
+world.reloaded = nil
+popup.OnAccept()
+check("its button reloads the interface", world.reloaded == true)
 settings.FEELSLIKE_LANGUAGE.callback(nil, "uk")
 check("ukrainian word at once", fontStrings.GameFontHighlightSmall.text == "Морозно", fontStrings.GameFontHighlightSmall.text)
+check("back to the language of the page: no window", world.popup == nil, world.popup)
+-- From an English page to Ukrainian the window speaks Ukrainian.
+ns, settings = LoadAddon(true, { label = "always" })
+settings.FEELSLIKE_LANGUAGE.callback(nil, "uk")
+popup = StaticPopupDialogs.FEELSLIKE_RELOAD
+check("the window speaks the new language", world.popup == "FEELSLIKE_RELOAD" and popup.button1 == "Перезавантажити"
+	and popup.button2 == "Пізніше" and popup.text:find("мову змінено", 1, true) ~= nil, popup and popup.text)
+world.popup = nil
+-- Without the game's windows the hint goes to chat.
+local showPopup = StaticPopup_Show
+_G.StaticPopup_Show = nil
+printed = {}
+settings.FEELSLIKE_LANGUAGE.callback(nil, "en")
+check("no window: the hint goes to chat", printed[1] and printed[1]:find("type /reload to change the settings page too", 1, true), printed[1])
+_G.StaticPopup_Show = showPopup
+ns, settings = LoadAddon(true, { language = "uk", label = "always" })
+Tick(10)
 -- The panel feed speaks Ukrainian too.
 local ukObjects = {}
 _G.LibStub = { GetLibrary = function() return { NewDataObject = function(_, name, object) ukObjects[name] = object return object end } end }
@@ -1788,7 +1891,7 @@ CoreEvent("PLAYER_ENTERING_WORLD", false, true)
 local ukLines = {}
 ukObjects["Feels Like"].OnTooltipShow({ AddLine = function(_, text) ukLines[#ukLines + 1] = text end })
 check("ukrainian panel feed", ukObjects["Feels Like"].text == "|cff6e9bffМорозно|r"
-	and table.concat(ukLines, " | ") == "Feels Like | Морозно | Холодніше: холодне місце, сніг, ніч | Клацни, щоб відкрити налаштування",
+	and table.concat(ukLines, " | ") == "Feels Like | Морозно | Чому: |cff8fd9f0холодне місце, сніг, ніч|r | Клацни, щоб відкрити налаштування",
 	table.concat(ukLines, " | "))
 _G.LibStub = nil
 local missing = {}
@@ -1798,6 +1901,109 @@ end
 check("every text shown has a ukrainian one", #missing == 0, table.concat(missing, " / "))
 ns = LoadAddon(true, { language = "klingon" })
 check("an unknown saved language is english", FeelsLikeDB.language == "en", FeelsLikeDB.language)
+
+-- An undead in Tirisfal Glades, a cool place: by day it is Mild whatever the race settings say, and the
+-- reasons of a Mild reading start with the side that wins.
+ns, settings = LoadAddon(true)
+world.race, world.raceName = "Scourge", "Undead"
+world.mapID, world.zoneText, world.hour = 1420, "Tirisfal Glades", 13
+world.weather = { type = 0, intensity = 0 }
+local function Reading()
+	Tick(1)
+	return ns.Gauge.target, ns.Model.Band(ns.Gauge.target, ns.Gauge.cozy).word
+end
+local numbDay, numbDayWord = Reading()
+FeelsLikeDB.undead = "living"
+local livingDay, livingDayWord = Reading()
+FeelsLikeDB.race = false
+local plainDay = Reading()
+check("tirisfal by day is mild for every undead setting", numbDayWord == "Mild" and livingDayWord == "Mild"
+	and livingDay == plainDay and math.abs(numbDay - livingDay) < 5, numbDay .. " " .. livingDay .. " " .. plainDay)
+local tirisfalGauge = _G.FeelsLikeGauge
+tirisfalGauge.scripts.OnEnter()
+check("a mild reading on the cold half names the cold first", table.concat(GameTooltip.lines, " | ")
+	== "Mild | Why: |cff8fd9f0a cool place|r, |cfff5a345the sun|r | Shift-drag to move", table.concat(GameTooltip.lines, " | "))
+world.indoors = true
+Tick(3)
+Tick(1)
+check("under a roof it is on the warm half and names the roof first", ns.Gauge.target > 0 and table.concat(GameTooltip.lines, " | ")
+	== "Mild | Why: |cfff5a345a roof|r, |cff8fd9f0a cool place|r | Shift-drag to move", table.concat(GameTooltip.lines, " | "))
+tirisfalGauge.scripts.OnLeave()
+world.indoors = false
+-- The settings show at night: Cold like the living, Mild for numb flesh.
+world.hour = 5
+Tick(3)
+FeelsLikeDB.race, FeelsLikeDB.undead = true, "living"
+local _, livingNightWord = Reading()
+FeelsLikeDB.undead = "numb"
+local _, numbNightWord = Reading()
+check("tirisfal before dawn: cold like the living, mild when numb", livingNightWord == "Cold" and numbNightWord == "Mild",
+	livingNightWord .. " " .. numbNightWord)
+world.race, world.raceName = "Human", "Human"
+
+-- The game's own outlined font is used for the word when the game has one: it knows every alphabet.
+_G.GameFontHighlightSmallOutline = {}
+fontStrings.GameFontHighlightSmallOutline = nil
+LoadAddon(true)
+check("the word uses the game's outlined font", fontStrings.GameFontHighlightSmallOutline ~= nil
+	and rawget(fontStrings.GameFontHighlightSmallOutline, "font") == nil)
+_G.GameFontHighlightSmallOutline = nil
+
+-- A fight warms you up, and you cool down after it.
+ns, settings = LoadAddon(true)
+world.mapID, world.zoneText, world.hour = 1429, "Elwynn Forest", 15
+world.weather = { type = 0, intensity = 0 }
+Tick(2)
+local calm = ns.Gauge.target
+check("no fight, no warmth", Slash("debug"):find("fight 0.00: +0.0", 1, true), calm)
+world.combat = true
+Tick(4)
+check("a fight warms you bit by bit", math.abs(ns.Gauge.target - (calm + 6)) < 0.01, ns.Gauge.target)
+Tick(10)
+check("a fight warms you by 12 at most", math.abs(ns.Gauge.target - (calm + 12)) < 0.01, ns.Gauge.target)
+check("debug shows the fight", Slash("debug"):find("fight 1.00: +12.0", 1, true))
+local fightGauge = _G.FeelsLikeGauge
+fightGauge.scripts.OnEnter()
+check("the tooltip names the fight", table.concat(GameTooltip.lines, " | "):find("a fight", 1, true), table.concat(GameTooltip.lines, " | "))
+fightGauge.scripts.OnLeave()
+world.combat = false
+Tick(15)
+check("you cool down after the fight", math.abs(ns.Gauge.target - (calm + 6)) < 0.01, ns.Gauge.target)
+Tick(20)
+check("the warmth of the fight is gone after 30 s", ns.Gauge.target == calm, ns.Gauge.target)
+
+-- The reasons are worked out only while a tooltip is open, and once per reading.
+local reasonCalls, realReasons = 0, ns.Model.Reasons
+ns.Model.Reasons = function(...)
+	reasonCalls = reasonCalls + 1
+	return realReasons(...)
+end
+Tick(5)
+check("no reasons worked out with no tooltip open", reasonCalls == 0, reasonCalls)
+fightGauge.scripts.OnEnter()
+check("an open tooltip works them out once", reasonCalls == 1, reasonCalls)
+fightGauge.scripts.OnLeave()
+fightGauge.scripts.OnEnter()
+check("the same reading is not worked out twice", reasonCalls == 1, reasonCalls)
+Tick(1)
+check("a new reading is worked out again while the tooltip is open", reasonCalls == 2, reasonCalls)
+fightGauge.scripts.OnLeave()
+ns.Model.Reasons = realReasons
+
+-- The tooltip opens toward the middle of the screen.
+-- x and y are on the screen, 1000 by 600 here. The gauge reports its place in its own scale.
+local function AnchorAt(x, y)
+	local scale = fightGauge:GetScale()
+	fightGauge.GetCenter = function() return x / scale, y / scale end
+	fightGauge.scripts.OnEnter()
+	local anchor = GameTooltip.anchor
+	fightGauge.scripts.OnLeave()
+	return anchor
+end
+check("top right: the tooltip opens down and left", AnchorAt(900, 500) == "ANCHOR_BOTTOMLEFT", GameTooltip.anchor)
+check("top left: down and right", AnchorAt(100, 500) == "ANCHOR_BOTTOMRIGHT", GameTooltip.anchor)
+check("bottom right: up and left", AnchorAt(900, 100) == "ANCHOR_LEFT", GameTooltip.anchor)
+check("bottom left: up and right", AnchorAt(100, 100) == "ANCHOR_RIGHT", GameTooltip.anchor)
 
 -- Seasons and holidays can be turned off.
 ns = LoadAddon(true)
@@ -1975,20 +2181,21 @@ check("a fireball holds a moment", ns.Gauge.target == 100, ns.Gauge.target)
 Tick(2)
 check("a fireball fades", ns.Gauge.target > -44 and ns.Gauge.target < 100, ns.Gauge.target)
 Tick(2)
-check("a fireball faded", math.abs(ns.Gauge.target - (-44)) < 0.01, ns.Gauge.target)
+-- The fight itself warms a little: 7.5 after 5 s, then 9, 10.5 and 12 in the checks below.
+check("a fireball faded", math.abs(ns.Gauge.target - (-44 + 7.5)) < 0.01, ns.Gauge.target)
 FeelsLikeDB.undead = "living"
 Tick(1)
 FireHit()
-check("a fireball does not burn undead like the living", math.abs(ns.Gauge.target - (-88)) < 0.01, ns.Gauge.target)
+check("a fireball does not burn undead like the living", math.abs(ns.Gauge.target - (-88 + 9)) < 0.01, ns.Gauge.target)
 check("debug has no fire spells for undead like the living", not Slash("debug"):find("fire spells", 1, true))
 FeelsLikeDB.undead = "numb"
 FeelsLikeDB.race = false
 Tick(1)
 FireHit()
-check("a fireball does not burn with race off", math.abs(ns.Gauge.target - (-88)) < 0.01, ns.Gauge.target)
+check("a fireball does not burn with race off", math.abs(ns.Gauge.target - (-88 + 10.5)) < 0.01, ns.Gauge.target)
 FeelsLikeDB.race = true
-check("a fireball does not burn a human", math.abs(RaceTarget("Human") - (-88)) < 0.01 and FireHit()
-	and math.abs(ns.Gauge.target - (-88)) < 0.01, ns.Gauge.target)
+check("a fireball does not burn a human", math.abs(RaceTarget("Human") - (-88 + 12)) < 0.01 and FireHit()
+	and math.abs(ns.Gauge.target - (-88 + 12)) < 0.01, ns.Gauge.target)
 check("debug has no fire spells for a human", not Slash("debug"):find("fire spells", 1, true))
 Tick(5)
 -- Just after the fight, fire is still a spell.

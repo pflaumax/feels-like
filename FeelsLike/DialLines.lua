@@ -77,10 +77,16 @@ function DialLines.Create(frame)
 
 	local dial = { name = "lines" }
 
-	function dial:Render(t)
+	-- A drawn needle can rest anywhere.
+	function dial:Rest(t)
+		return t
+	end
+
+	-- t is where the needle is. glow is the reading the ring and the face show, t if not given.
+	function dial:Render(t, glow)
 		needle:SetEndPoint("CENTER", frame, Polar(Model.Angle(t), NEEDLE_LENGTH))
 
-		local cold, hot = Model.Extremes(t)
+		local cold, hot = Model.Extremes(glow or t)
 		local tint = cold > 0 and RING_COLD or RING_HOT
 		local k = math.max(cold, hot)
 		-- Gold times blue gives olive, so the ring fades before it turns icy.

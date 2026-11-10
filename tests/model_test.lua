@@ -435,14 +435,14 @@ local function reasons(fields, wetness)
 end
 check("reasons in the snow at night", reasons({ base = -60, climate = "snow", hour = 5, weather = "snow", weatherIntensity = 1 }),
 	"a cold place, snow, the night / ")
-check("reasons by a fire with a drink", reasons({ base = -60, campfire = 1, drunk = 2 }), "a cold place / a campfire, a drink")
+check("reasons by a fire with a drink", reasons({ base = -60, campfire = 1, drunk = 2 }), " / a campfire")
 check("reasons at a desert noon", reasons({ base = 55, climate = "desert", hour = 15 }), " / a hot place, the sun")
-check("reasons in the water", reasons({ base = 15, swimming = true }, 1), "the water / a warm place")
-check("reasons in wet clothes", reasons({ base = 15 }, 1), "wet clothes / a warm place")
+check("reasons in the water", reasons({ base = 15, swimming = true }, 1), "the water / ")
+check("reasons in wet clothes", reasons({ base = 15 }, 1), "wet clothes / ")
 check("reasons in a cool place at night", reasons({ base = -15, climate = "temperate", hour = 5 }), "the night, a cool place / ")
-check("reasons under a roof in the heat", reasons({ base = 75, indoors = true }), "a roof / a hot place")
-check("reasons in an inn in the cold", reasons({ base = -60, indoors = true, inn = true }), "a cold place / the inn")
-check("reasons name the body", reasons({ base = -60, body = { cold = 0.75, heat = 1 }, bodyWord = "your fur" }), "a cold place / your fur")
+check("reasons under a roof in the heat", reasons({ base = 75, indoors = true }), " / a hot place")
+check("reasons in an inn in the cold", reasons({ base = -60, indoors = true, inn = true }), " / the inn")
+check("reasons name the body", reasons({ base = -60, body = { cold = 0.75, heat = 1 }, bodyWord = "your fur" }), "a cold place / ")
 check("reasons in fire", reasons({ base = 0, burning = 1 }), " / fire")
 check("small steps get no word", reasons({ base = 2 }), " / ")
 check("at most three reasons a side", reasons({ base = -60, climate = "snow", hour = 5, weather = "snow", weatherIntensity = 1 }, 1),
@@ -450,7 +450,54 @@ check("at most three reasons a side", reasons({ base = -60, climate = "snow", ho
 check("a ghost's reason", reasons({ base = 60, dead = true }), "death / ")
 check("reasons name the holiday", reasons({ base = 5, climate = "temperate", hour = 15, month = 12, day = 24 }), "Winter Veil / the sun, a warm place")
 check("reasons name the season", reasons({ base = 5, climate = "temperate", hour = 15, month = 7, day = 20 }), " / the sun, a warm place, summer")
-check("reasons name a frost spell", reasons({ base = 15, frostSpell = 1 }), "a frost spell / a warm place")
+-- One line that never argues with the word: a cold word names no warmth, Cozy names only its source.
+check("a cold word names no sun", reasons({ base = -60, climate = "snow", hour = 15, weather = "snow", weatherIntensity = 1 }),
+	"a cold place, snow / ")
+check("cozy in an inn in the snow names only the inn",
+	reasons({ base = -60, climate = "snow", hour = 15, weather = "snow", weatherIntensity = 1, indoors = true, inn = true }), " / the inn")
+check("mild names both sides", reasons({ base = -30, torch = true }), "a cool place / a torch")
+check("no sun and no snow under a roof",
+	reasons({ base = -60, climate = "snow", hour = 15, weather = "snow", weatherIntensity = 1, indoors = true }), "a cold place / ")
+check("the night still counts under a roof", reasons({ base = -15, climate = "temperate", hour = 5, indoors = true }), "the night, a cool place / a roof")
+check("reasons name a frost spell", reasons({ base = 15, frostSpell = 1 }), "a frost spell / ")
+
+-- A fight warms you
+check("a fight builds warmth over 8 s", Model.UpdateExertion(0, 4, true), 0.5)
+check("the warmth of a fight stops at full", Model.UpdateExertion(0.9, 4, true), 1)
+check("it fades over 30 s after the fight", Model.UpdateExertion(1, 15, false), 0.5)
+check("and is gone then", Model.UpdateExertion(0.2, 30, false), 0)
+check("a fight warms by 12", Model.Compute(state({ base = -60, exertion = 1 }), 0).target, -48)
+check("half a fight warms by 6", Model.Compute(state({ base = 20, exertion = 0.5 }), 0).target, 26)
+check("a fight warms the numb undead alike", Model.Compute(state({ base = -60, exertion = 1, body = { cold = 0.5, heat = 0.6 } }), 0).target, -18)
+check("a fight warms no further than a fire", Model.Compute(state({ base = 40, exertion = 1 }), 0).target, 45)
+check("a fight changes nothing in the heat", Model.Compute(state({ base = 60, exertion = 1 }), 0).target, 60)
+check("and takes no blame there", Model.Compute(state({ base = 60, exertion = 1 }), 0).fight, 0)
+local byFire = Model.Compute(state({ base = 20, campfire = 1, exertion = 1 }), 0)
+check("cozy by a fire stays cozy in a fight", byFire.cozy and byFire.target, 45)
+check("a ghost feels no fight", Model.Compute(state({ base = 20, exertion = 1, dead = true }), 0).target, Model.DEAD_FEEL)
+check("reasons name the fight", reasons({ base = 40, exertion = 1 }), " / a hot place, a fight")
+check("reasons name the fight in a mild place", reasons({ base = 10, exertion = 1 }), " / a fight, a warm place")
+
+-- The needle on its spring
+local function glide(from, aim, seconds, dt)
+	local position, velocity, extreme = from, 0, from
+	for _ = 1, math.floor(seconds / dt + 0.5) do
+		position, velocity = Model.NeedleStep(position, velocity, aim, dt)
+		extreme = aim > from and math.max(extreme, position) or math.min(extreme, position)
+	end
+	return position, velocity, extreme
+end
+local needleAt, needleSpeed, needlePeak = glide(0, 100, 3, 0.01)
+check("the needle comes to rest on its aim", math.abs(needleAt - 100) < 0.01 and math.abs(needleSpeed) < 0.01, true)
+check("the needle swings a little past its aim", needlePeak > 104 and needlePeak < 109, true)
+local downAt, _, downPeak = glide(50, -50, 3, 0.01)
+check("the same on the way down", math.abs(downAt + 50) < 0.01 and downPeak < -54 and downPeak > -59, true)
+local slowFrames, slowSpeed = glide(0, 100, 0.4, 0.1)
+local fastFrames, fastSpeed = glide(0, 100, 0.4, 0.004)
+check("the needle moves the same at any frame rate", math.abs(slowFrames - fastFrames) < 1e-6 and math.abs(slowSpeed - fastSpeed) < 1e-6, true)
+check("the needle starts gently", select(1, Model.NeedleStep(0, 0, 100, 0.016)) < 1, true)
+check("a needle at rest stays", select(1, Model.NeedleStep(30, 0, 30, 1)), 30)
+check("a long freeze of the game is no trouble", math.abs(select(1, Model.NeedleStep(0, 0, 100, 60)) - 100) < 1e-6, true)
 
 -- Shelter delay
 local memory = {}
@@ -475,7 +522,7 @@ check("ukrainian is listed with its own name", ns.Locale.names.uk, "Україн
 check("the languages in the settings", table.concat(ns.Locale.order, ","), "en,uk")
 ns.Locale.Set("uk")
 check("ukrainian word", ns.T("Cold"), "Холодно")
-local texts = { "Freezing", "Cold", "Mild", "Warm", "Hot", "Scorching", "Cozy", "Colder", "Warmer",
+local texts = { "Freezing", "Cold", "Mild", "Warm", "Hot", "Scorching", "Cozy", "Why",
 	"your fur", "your race", "dead flesh" }
 for _, word in ipairs(Model.REASON_WORDS) do
 	texts[#texts + 1] = word
@@ -510,7 +557,7 @@ for _, fields in ipairs({
 	{ base = 5, climate = "temperate", hour = 5, month = 12, day = 24, campfire = 1, torch = true, drunk = 3 },
 	{ base = 5, climate = "temperate", hour = 15, month = 6, day = 25, indoors = true, inn = true },
 	{ base = -20, indoors = true, frostSpell = 1 }, { base = 20, swimming = true }, { base = 20, burning = 1 },
-	{ base = 60, dead = true }, { base = -60, body = { cold = 0.75, heat = 1 } }, { base = 5, climate = "temperate", hour = 15, month = 1, day = 20 },
+	{ base = 60, dead = true }, { base = 20, exertion = 1 }, { base = -60, body = { cold = 0.75, heat = 1 } }, { base = 5, climate = "temperate", hour = 15, month = 1, day = 20 },
 }) do
 	local s = state(fields)
 	local colder, warmer = Model.Reasons(s, Model.Compute(s, fields.swimming and 1 or 0.6))

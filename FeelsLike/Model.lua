@@ -26,22 +26,23 @@ local NEUTRAL = rgb("24323E")
 
 -- Segment colors from coldest to hottest.
 Model.SEGMENT_COLORS = {
-	rgb("2747C9"), rgb("3A78E8"), rgb("66B3F0"), rgb("A8E2F7"),
+	rgb("2E58DC"), rgb("3A78E8"), rgb("66B3F0"), rgb("A8E2F7"),
 	NEUTRAL, NEUTRAL, NEUTRAL, NEUTRAL,
 	rgb("F2D24B"), rgb("F5A445"), rgb("EE7135"), rgb("E0403C"),
 }
 
--- Label words and colors.
+-- Label words and colors. side is -1 for a cold word, 1 for a warm one and 0 for the middle.
 local BANDS = {
-	{ lastSegment = 2, word = "Freezing", color = rgb("6E9BFF") },
-	{ lastSegment = 4, word = "Cold", color = rgb("8FD8F0") },
-	{ lastSegment = 8, word = "Mild", color = rgb("C8D3DC") },
-	{ lastSegment = 9, word = "Warm", color = rgb("F2D24B") },
-	{ lastSegment = 11, word = "Hot", color = rgb("F5A445") },
-	{ lastSegment = 12, word = "Scorching", color = rgb("FF6B6B") },
+	{ lastSegment = 2, word = "Freezing", side = -1, color = rgb("6E9BFF") },
+	{ lastSegment = 4, word = "Cold", side = -1, color = rgb("8FD8F0") },
+	{ lastSegment = 8, word = "Mild", side = 0, color = rgb("DCDCDC") },
+	{ lastSegment = 9, word = "Warm", side = 1, color = rgb("F2D24B") },
+	{ lastSegment = 11, word = "Hot", side = 1, color = rgb("F5A445") },
+	{ lastSegment = 12, word = "Scorching", side = 1, color = rgb("FF6B6B") },
 }
 
-local COZY = { word = "Cozy", color = rgb("FFB86B") }
+-- Cozy is not a step between cold and hot, so its color is none of theirs.
+local COZY = { word = "Cozy", color = rgb("7EDC9E") }
 
 function Model.Clamp(t)
 	if t ~= t then -- NaN
@@ -85,6 +86,23 @@ function Model.Band(t, cozy)
 			return band
 		end
 	end
+end
+
+-- The needle moves like one on a spring: it speeds up, swings a little past the reading and comes back.
+local NEEDLE_FREQUENCY = 8 -- how fast it swings, in radians per second
+local NEEDLE_DAMPING = 0.65 -- below 1 it swings past: about 7 percent of the way here
+
+-- Where the needle is and how fast it moves after dt seconds on its way to aim. The answer is exact for any
+-- dt, so the needle moves the same at any frame rate.
+function Model.NeedleStep(position, velocity, aim, dt)
+	local decay = NEEDLE_DAMPING * NEEDLE_FREQUENCY
+	local swing = NEEDLE_FREQUENCY * math.sqrt(1 - NEEDLE_DAMPING * NEEDLE_DAMPING)
+	local a = position - aim
+	local b = (velocity + decay * a) / swing
+	local fade = math.exp(-decay * dt)
+	local cos, sin = math.cos(swing * dt), math.sin(swing * dt)
+	return aim + fade * (a * cos + b * sin),
+		fade * ((b * swing - decay * a) * cos - (a * swing + decay * b) * sin)
 end
 
 -- Returns how cold and how hot, each from 0 to 1.
@@ -200,6 +218,11 @@ local FROST_SPELL_FADE = 3
 
 -- A drink warms a cold body: tipsy, drunk, completely smashed.
 local DRINK_WARMTH = { 10, 20, 30 }
+-- A fight warms you: the body works hard. The warmth builds over the first seconds of a fight and fades
+-- when it is over. Like a fire, it makes you warm but never hot.
+local FIGHT_WARMTH = 12
+local FIGHT_RISE = 8 -- seconds of fighting to the full warmth
+local FIGHT_FADE = 30 -- seconds to cool down after the fight
 
 -- The fire renews Cozy Fire while you stand near. An old aura means you walked away.
 local CAMPFIRE_HOLD = 4 -- seconds since renewal that still count as near
@@ -353,6 +376,7 @@ function Model.Compute(state, wetness)
 	local inn = InInn(state) or false
 	r.inn = inn
 	local roomTemperature, outsideAir = Shelter(state)
+	r.outsideAir = outsideAir
 	-- Under a roof on hot ground only the weather stays outside.
 	r.groundHeat = GROUND_HEAT[state.climate] and outsideAir < 1 or false
 	if r.groundHeat then
@@ -384,8 +408,10 @@ function Model.Compute(state, wetness)
 	r.race = scaled - unscaled
 	-- A drink warms only a cold body, and never past the middle of Mild.
 	r.drink = math.min(DRINK_WARMTH[state.drunk] or 0, math.max(0, -scaled))
+	-- A fight warms every body alike, but no further than a fire does: Cozy by a fire stays Cozy.
+	r.fight = math.min(FIGHT_WARMTH * (state.exertion or 0), math.max(0, FIRE_CEILING - scaled - r.drink))
 	-- Fire underfoot pulls the reading toward hot. Fire spells in a fight burn only a body that feels them.
-	local beforeFrost = math.min(scaled + r.drink, AIR_CEILING)
+	local beforeFrost = math.min(scaled + r.drink + r.fight, AIR_CEILING)
 	-- A frost spell pulls the reading toward the cold for a moment, the same for every body.
 	r.frost = math.min(0, (FROST_FEEL - beforeFrost) * (state.frostSpell or 0))
 	local beforeBurn = beforeFrost + r.frost
@@ -408,6 +434,14 @@ function Model.Compute(state, wetness)
 	r.cozy = (inn or byFire) and not state.swimming and r.target >= COZY_MIN
 		and Model.SegmentIndex(r.target) <= COZY_LAST_SEGMENT or false
 	return r
+end
+
+-- Returns how warm the fight has made you after dt seconds, from 0 to 1.
+function Model.UpdateExertion(exertion, dt, fighting)
+	if fighting then
+		return math.min(1, exertion + dt / FIGHT_RISE)
+	end
+	return math.max(0, exertion - dt / FIGHT_FADE)
 end
 
 -- Returns the new wetness after dt seconds.
@@ -439,7 +473,7 @@ end
 
 -- A step smaller than this is not worth a word in the tooltip.
 local REASON_MIN = 3
--- The tooltip names this many reasons on each side.
+-- The tooltip names this many reasons.
 local REASON_COUNT = 3
 -- A place past this base is cold or hot, a place inside it only cool or warm.
 local STRONG_PLACE = 34
@@ -456,19 +490,25 @@ Model.REASON_WORDS = {
 	"a cold place", "a cool place", "a warm place", "a hot place", "the night", "the sun", "rain", "snow",
 	"a sandstorm", "the weather", "winter", "summer", "Winter Veil", "Midsummer", "the season", "humid air",
 	"the inn", "a roof", "a campfire", "a torch", "the water", "wet clothes", "your body", "a drink",
-	"a frost spell", "fire", "death",
+	"a fight", "a frost spell", "fire", "death",
 }
 
--- What makes the reading colder and what makes it warmer right now, strongest first, in plain words.
--- Returns two lists for the tooltip. state.bodyWord names the body, like "your fur".
+-- Why the reading has its word right now, strongest first, in plain words. Returns the reasons that make it
+-- colder and the ones that make it warmer, for one line in the tooltip. A cold word names only what makes it
+-- cold and a warm word only what makes it warm, so the line never argues with the word. Mild names both.
+-- Cozy names its fire or its inn. state.bodyWord names the body, like "your fur".
 function Model.Reasons(state, r)
 	if state.dead then
 		return { "death" }, {}
+	elseif r.cozy then
+		return {}, { r.inn and "the inn" or "a campfire" }
 	end
+	-- Under a roof the sun and the weather do not reach you. Only the air they warm or chill gets in.
+	local roofed = (r.outsideAir or 1) < 1
 	local steps = {
 		{ state.base, PlaceWord(state.base) },
-		{ r.dayNight, r.dayNight < 0 and "the night" or "the sun" },
-		{ r.weather, state.weather == "sandstorm" and "a sandstorm" or state.weather or "the weather" },
+		{ r.dayNight, r.dayNight < 0 and "the night" or not roofed and "the sun" },
+		{ r.weather, not roofed and (state.weather == "sandstorm" and "a sandstorm" or state.weather or "the weather") },
 		{ r.season, r.seasonName or "the season" },
 		{ r.humid, "humid air" },
 		{ r.sheltered - r.env, r.inn and "the inn" or "a roof" },
@@ -477,17 +517,21 @@ function Model.Reasons(state, r)
 		{ r.wet, state.swimming and "the water" or "wet clothes" },
 		{ r.race, state.bodyWord or "your body" },
 		{ r.drink, "a drink" },
+		{ r.fight, "a fight" },
 		{ r.frost, "a frost spell" },
 		{ r.burn, "fire" },
 	}
 	table.sort(steps, function(a, b)
 		return math.abs(a[1]) > math.abs(b[1])
 	end)
+	local side = Model.Band(r.target, false).side
 	local colder, warmer = {}, {}
 	for _, step in ipairs(steps) do
-		local list = step[1] < 0 and colder or warmer
-		if math.abs(step[1]) >= REASON_MIN and #list < REASON_COUNT then
-			list[#list + 1] = step[2]
+		local value, word = step[1], step[2]
+		local fits = side == 0 or (value < 0) == (side < 0)
+		if word and fits and math.abs(value) >= REASON_MIN and #colder + #warmer < REASON_COUNT then
+			local list = value < 0 and colder or warmer
+			list[#list + 1] = word
 		end
 	end
 	return colder, warmer

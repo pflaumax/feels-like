@@ -23,10 +23,14 @@ local CLASSIC_DISTANCE = math.sqrt(55 * 55 + 90 * 90) / 70
 local FALLBACK_X = -110
 local FALLBACK_Y = 140
 
--- How fast the needle moves.
-local FOLLOW_SPEED = 4
+-- The needle rests once it is this near its place and this slow, in units of the scale and units per second.
+local NEEDLE_REST = 0.05
+local NEEDLE_REST_SPEED = 0.5
 
 local frame, dial, label
+local velocity = 0 -- of the needle
+-- The ring and the face show this reading. It never swings past the real one like the needle does.
+local glow, glowFrom = 0, 0
 local db
 local hovered = false
 local moving = false
@@ -37,15 +41,21 @@ local MOVED = 1 -- pixels that count as a real move
 local hintShown = false
 
 -- The tooltip says why the reading is what it is.
-local reasons = { colder = {}, warmer = {}, test = false }
+local function NoReasons()
+	return {}, {}
+end
+-- source gives the reasons of the last reading when the tooltip needs them. test is true while a test value shows.
+local reasons = { source = NoReasons, test = false }
 local COLDER_COLOR = { 0.56, 0.85, 0.94 }
 local WARMER_COLOR = { 0.96, 0.64, 0.27 }
+local TITLE_COLOR = { 0.9, 0.9, 0.9 }
 local HINT_COLOR = { 0.6, 0.6, 0.6 }
+Gauge.TITLE_COLOR, Gauge.HINT_COLOR = TITLE_COLOR, HINT_COLOR -- the panel feed uses them too
 -- What the open tooltip shows, so it is only built again when that changes and does not flicker.
 local tooltipShown
 
-Gauge.target = 0
-Gauge.display = 0
+Gauge.target = 0 -- the reading
+Gauge.display = 0 -- where the needle is: on its way, or at rest as near the reading as the dial can show
 Gauge.cozy = false
 
 -- Offset of a frame from the minimap center in screen pixels.
@@ -101,40 +111,74 @@ local function UpdateLabel()
 	label:Show()
 end
 
--- One tooltip line in the chosen language, like "Colder: a cold place, snow". Also for the panel feed.
-function Gauge.ReasonLine(title, words)
+-- Text in a color, for a tooltip line or a panel. Also for the panel feed.
+function Gauge.Colored(text, color)
+	return string.format("|cff%02x%02x%02x%s|r", color[1] * 255 + 0.5, color[2] * 255 + 0.5, color[3] * 255 + 0.5, text)
+end
+
+local function Colored(words, color)
 	local translated = {}
 	for index, word in ipairs(words) do
 		translated[index] = T(word)
 	end
-	return T(title) .. ": " .. table.concat(translated, ", ")
+	return Gauge.Colored(table.concat(translated, ", "), color)
+end
+
+-- The one tooltip line that says why, in the chosen language, like "Why: a cold place, snow". What makes it
+-- colder is blue and what makes it warmer is orange. With both, the side that wins comes first: warmFirst
+-- is true for a reading on the warm half. nil with no reasons. Also for the panel feed.
+function Gauge.ReasonLine(colder, warmer, warmFirst)
+	local parts = {}
+	if #colder > 0 then
+		parts[#parts + 1] = Colored(colder, COLDER_COLOR)
+	end
+	if #warmer > 0 then
+		table.insert(parts, warmFirst and 1 or #parts + 1, Colored(warmer, WARMER_COLOR))
+	end
+	if #parts == 0 then
+		return nil
+	end
+	return T("Why") .. ": " .. table.concat(parts, ", ")
+end
+
+-- The tooltip opens toward the middle of the screen, away from the edge the gauge sits by.
+local function TooltipAnchor()
+	local x, y = frame:GetCenter()
+	local middleX, middleY = UIParent:GetCenter()
+	if not (x and middleX) then
+		return "ANCHOR_BOTTOMLEFT"
+	end
+	local scale = frame:GetScale()
+	local right, top = x * scale >= middleX, y * scale >= middleY
+	if top then
+		return right and "ANCHOR_BOTTOMLEFT" or "ANCHOR_BOTTOMRIGHT"
+	end
+	return right and "ANCHOR_LEFT" or "ANCHOR_RIGHT"
 end
 
 -- Fills the tooltip while the mouse is on the gauge: the word, the reasons and how to move it.
 -- fresh is true when the mouse has just come.
 local function UpdateTooltip(fresh)
-	if not hovered then
+	if not hovered or not db.tooltip then
 		return
 	end
 	local band = Model.Band(Gauge.target, Gauge.cozy)
-	local shown = table.concat({ band.word, table.concat(reasons.colder, ","), table.concat(reasons.warmer, ","),
-		tostring(reasons.test), tostring(db.locked), ns.Locale.language }, "|")
+	local anchor = TooltipAnchor()
+	local colder, warmer = reasons.source()
+	local shown = table.concat({ band.word, tostring(Gauge.target >= 0), table.concat(colder, ","), table.concat(warmer, ","),
+		tostring(reasons.test), tostring(db.locked), ns.Locale.language, anchor }, "|")
 	if not fresh and shown == tooltipShown then
 		return
 	end
 	tooltipShown = shown
-	GameTooltip:SetOwner(frame, "ANCHOR_BOTTOMLEFT")
+	GameTooltip:SetOwner(frame, anchor)
 	GameTooltip:SetText(T(band.word), band.color[1], band.color[2], band.color[3])
 	if reasons.test then
 		GameTooltip:AddLine(T("A test value. /feels test off ends it."), HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3], true)
 	else
-		if #reasons.colder > 0 then
-			GameTooltip:AddLine(Gauge.ReasonLine("Colder", reasons.colder),
-				COLDER_COLOR[1], COLDER_COLOR[2], COLDER_COLOR[3], true)
-		end
-		if #reasons.warmer > 0 then
-			GameTooltip:AddLine(Gauge.ReasonLine("Warmer", reasons.warmer),
-				WARMER_COLOR[1], WARMER_COLOR[2], WARMER_COLOR[3], true)
+		local line = Gauge.ReasonLine(colder, warmer, Gauge.target >= 0)
+		if line then
+			GameTooltip:AddLine(line, TITLE_COLOR[1], TITLE_COLOR[2], TITLE_COLOR[3], true)
 		end
 	end
 	if not db.locked then
@@ -143,9 +187,9 @@ local function UpdateTooltip(fresh)
 	GameTooltip:Show()
 end
 
--- A locked gauge only needs the mouse for the hover label. Without the mouse there is no tooltip.
+-- A locked gauge only needs the mouse for the hover label and the tooltip. With neither it lets clicks through.
 local function UpdateMouse()
-	local enabled = not db.locked or db.label == "hover"
+	local enabled = not db.locked or db.label == "hover" or db.tooltip
 	frame:EnableMouse(enabled)
 	if not enabled and hovered then
 		hovered = false
@@ -154,14 +198,17 @@ local function UpdateMouse()
 end
 
 local function OnUpdate(self, elapsed)
-	local diff = Gauge.target - Gauge.display
-	if math.abs(diff) < 0.05 then
-		Gauge.display = Gauge.target
+	-- The dial knows where its needle can rest for this reading.
+	local aim = dial:Rest(Gauge.target)
+	Gauge.display, velocity = Model.NeedleStep(Gauge.display, velocity, aim, elapsed)
+	-- The glow follows the needle on its way but stops at the reading: a needle that swings past Hot must not
+	-- light the ring like Scorching.
+	glow = math.max(math.min(glowFrom, Gauge.target), math.min(Gauge.display, math.max(glowFrom, Gauge.target)))
+	if math.abs(aim - Gauge.display) < NEEDLE_REST and math.abs(velocity) < NEEDLE_REST_SPEED then
+		Gauge.display, velocity, glow = aim, 0, Gauge.target
 		self:SetScript("OnUpdate", nil)
-	else
-		Gauge.display = Gauge.display + diff * math.min(1, elapsed * FOLLOW_SPEED)
 	end
-	dial:Render(Gauge.display)
+	dial:Render(Gauge.display, glow)
 end
 
 local function SavePosition()
@@ -191,7 +238,17 @@ function Gauge:Create(savedVariables)
 	-- The label has its own frame so it stays readable at small sizes.
 	local labelFrame = CreateFrame("Frame", nil, UIParent)
 	labelFrame:SetFrameStrata(frame:GetFrameStrata())
-	label = labelFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	-- A dark outline keeps the word readable on snow, sand and other bright ground. The game's own outlined
+	-- font keeps the letters of every alphabet. Without it, the outline goes on the plain font.
+	if GameFontHighlightSmallOutline then
+		label = labelFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmallOutline")
+	else
+		label = labelFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+		local font, fontSize = label:GetFont()
+		if font then
+			label:SetFont(font, fontSize, "OUTLINE")
+		end
+	end
 
 	-- Shift is needed to move the gauge. The move starts at the press, so it follows the mouse at once:
 	-- a drag only starts after the mouse has moved some way.
@@ -264,6 +321,7 @@ function Gauge:SetTarget(t)
 		return
 	end
 	self.target = t
+	glowFrom = glow -- the glow moves on from where it is
 	frame:SetScript("OnUpdate", OnUpdate)
 	UpdateLabel()
 end
@@ -282,14 +340,28 @@ function Gauge:Refresh()
 	UpdateTooltip()
 end
 
--- colder and warmer are lists of words from Model.Reasons. test is true while a test value shows.
-function Gauge:SetReasons(colder, warmer, test)
-	reasons.colder, reasons.warmer, reasons.test = colder, warmer, test or false
+-- source is a function that returns the colder and the warmer words of Model.Reasons. It is called only
+-- while the tooltip is open. test is true while a test value shows.
+function Gauge:SetReasons(source, test)
+	reasons.source, reasons.test = source or NoReasons, test or false
 	UpdateTooltip()
 end
 
 function Gauge:SetUnit(unit)
 	dial:SetUnit(unit)
+end
+
+-- The tooltip on hover can be turned off. The word next to the gauge has its own setting.
+function Gauge:SetTooltip(on)
+	db.tooltip = on
+	UpdateMouse()
+	if not hovered then
+		return
+	elseif on then
+		UpdateTooltip(true)
+	else
+		GameTooltip:Hide()
+	end
 end
 
 -- mode is hover, always or never.

@@ -13,9 +13,8 @@ ns.Locale.Add("uk", "Українська", {
 	["Cozy"] = "Затишно",
 
 	-- Tooltip.
-	["Colder"] = "Холодніше",
-	["Warmer"] = "Тепліше",
-	["Shift-drag to move"] = "Shift + перетягування, щоб пересунути",
+	["Why"] = "Чому",
+	["Shift-drag to move"] = "Shift + тягни, щоб пересунути",
 	["A test value. /feels test off ends it."] = "Тестове значення. /feels test off вимикає його.",
 	["Click to open the settings"] = "Клацни, щоб відкрити налаштування",
 
@@ -47,6 +46,7 @@ ns.Locale.Add("uk", "Українська", {
 	["your race"] = "твоя раса",
 	["dead flesh"] = "мертва плоть",
 	["a drink"] = "випивка",
+	["a fight"] = "бій",
 	["a frost spell"] = "крижане закляття",
 	["fire"] = "вогонь",
 	["death"] = "смерть",
@@ -62,15 +62,18 @@ ns.Locale.Add("uk", "Українська", {
 	["Celsius"] = "Цельсій",
 	["Fahrenheit"] = "Фаренгейт",
 	["Unit symbol inside the gauge."] = "Позначка одиниць усередині датчика.",
-	["Show word"] = "Показувати слово",
+	["Show status"] = "Показувати статус",
 	["On hover"] = "При наведенні",
 	["Always"] = "Завжди",
 	["Never"] = "Ніколи",
-	["One word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."] =
-		"Одне слово біля датчика: Морозно, Холодно, Помірно, Тепло, Спекотно, Пекельно або Затишно.",
+	["The status is one word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."] =
+		"Статус — це одне слово біля датчика: Морозно, Холодно, Помірно, Тепло, Спекотно, Пекельно або Затишно.",
+	["Tooltip on hover"] = "Підказка при наведенні",
+	["On: hover the gauge for a tooltip with the status and why it is so. Off: no tooltip, only the status word as set above."] =
+		"Увімкнено: наведи курсор на датчик, і підказка покаже статус та чому він такий. Вимкнено: підказки немає, лише слово статусу, як задано вище.",
 	["Feel by race"] = "Відчуття за расою",
-	["Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren."] =
-		"Раса змінює те, наскільки сильно ти відчуваєш холод і спеку. Дворфи краще переносять холод. Таурени теж, але гірше переносять спеку, а тролі навпаки. Нежить майже не відчуває ні того, ні іншого. Друїди у формі кота, ведмедя, у подорожній, водній формі чи формі совуха мають хутро, як таурени.",
+	["Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren. It shows in cold and hot places: a mild place feels almost the same to everyone."] =
+		"Раса змінює те, наскільки сильно ти відчуваєш холод і спеку. Дворфи краще переносять холод. Таурени теж, але гірше переносять спеку, а тролі навпаки. Нежить майже не відчуває ні того, ні іншого. Друїди у формі кота, ведмедя, у подорожній, водній формі чи формі совуха мають хутро, як таурени. Різницю видно в холодних і спекотних місцях: у помірному місці всі почуваються майже однаково.",
 	["Undead feel"] = "Відчуття нежиті",
 	["Numb"] = "Нечутлива",
 	["Like the living"] = "Як живі",
@@ -83,8 +86,12 @@ ns.Locale.Add("uk", "Українська", {
 	["Now and then a short line in chat, only for you, when your character starts to feel the cold, the heat or Cozy."] =
 		"Час від часу короткий рядок у чаті, лише для тебе, коли персонаж починає відчувати холод, спеку чи затишок.",
 	["Language"] = "Мова",
-	["The language of the word, the tooltip and the lines in chat. Type /reload to change this page too."] =
-		"Мова слова, підказки й рядків у чаті. Введи /reload, щоб змінити й цю сторінку.",
+	["The language of the status, the tooltip and the lines in chat. They change at once. This page changes after a reload of the interface, and the addon offers one."] =
+		"Мова статусу, підказки й рядків у чаті. Вони змінюються одразу. Ця сторінка змінюється після перезавантаження інтерфейсу, і аддон одразу його пропонує.",
+	["Feels Like: the language changed. The status, the tooltip and the lines in chat have changed already. The settings page changes after a reload of the interface. Reload now?"] =
+		"Feels Like: мову змінено. Статус, підказка й репліки в чаті вже змінилися. Сторінка налаштувань зміниться після перезавантаження інтерфейсу. Перезавантажити зараз?",
+	["Reload"] = "Перезавантажити",
+	["Later"] = "Пізніше",
 	["Lock position"] = "Закріпити позицію",
 	["When unlocked, hold Shift and drag the gauge to move it."] = "Коли не закріплено, затисни Shift і тягни датчик, щоб пересунути.",
 	["Scale"] = "Масштаб",

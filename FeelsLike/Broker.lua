@@ -9,35 +9,31 @@ ns.Broker = Broker
 
 local LIBRARY = "LibDataBroker-1.1"
 local ICON = "Interface\\AddOns\\" .. addonName .. "\\Media\\Icon"
-local COLDER_COLOR = { 0.56, 0.85, 0.94 }
-local WARMER_COLOR = { 0.96, 0.64, 0.27 }
-local HINT_COLOR = { 0.6, 0.6, 0.6 }
 
 local object
 -- The last reading, kept so a feed that starts late shows it at once.
-local last = { target = 0, cozy = false, colder = {}, warmer = {} }
-
-local function Colored(text, color)
-	return string.format("|cff%02x%02x%02x%s|r", color[1] * 255 + 0.5, color[2] * 255 + 0.5, color[3] * 255 + 0.5, text)
+local function NoReasons()
+	return {}, {}
 end
+local last = { target = 0, cozy = false, reasons = NoReasons }
 
 local function Refresh()
 	if not object then
 		return
 	end
 	local band = ns.Model.Band(last.target, last.cozy)
-	object.text = Colored(T(band.word), band.color)
+	object.text = ns.Gauge.Colored(T(band.word), band.color)
 end
 
 local function ShowTooltip(tooltip)
 	local band = ns.Model.Band(last.target, last.cozy)
+	local TITLE_COLOR, HINT_COLOR = ns.Gauge.TITLE_COLOR, ns.Gauge.HINT_COLOR
 	tooltip:AddLine("Feels Like")
 	tooltip:AddLine(T(band.word), band.color[1], band.color[2], band.color[3])
-	if #last.colder > 0 then
-		tooltip:AddLine(ns.Gauge.ReasonLine("Colder", last.colder), COLDER_COLOR[1], COLDER_COLOR[2], COLDER_COLOR[3], true)
-	end
-	if #last.warmer > 0 then
-		tooltip:AddLine(ns.Gauge.ReasonLine("Warmer", last.warmer), WARMER_COLOR[1], WARMER_COLOR[2], WARMER_COLOR[3], true)
+	local colder, warmer = last.reasons()
+	local line = ns.Gauge.ReasonLine(colder, warmer, last.target >= 0)
+	if line then
+		tooltip:AddLine(line, TITLE_COLOR[1], TITLE_COLOR[2], TITLE_COLOR[3], true)
 	end
 	tooltip:AddLine(T("Click to open the settings"), HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3])
 end
@@ -64,9 +60,10 @@ function Broker.Register(onClick)
 	return object ~= nil
 end
 
--- The real reading and its reasons, after every update.
-function Broker.Update(target, cozy, colder, warmer)
-	last.target, last.cozy, last.colder, last.warmer = target, cozy, colder, warmer
+-- The real reading, after every update. reasons is a function that returns its colder and warmer words; it
+-- is called only when the panel shows the tooltip.
+function Broker.Update(target, cozy, reasons)
+	last.target, last.cozy, last.reasons = target, cozy, reasons
 	Refresh()
 end
 

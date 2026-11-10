@@ -101,6 +101,8 @@ local lastCombatEnd
 local lastFireHit
 local lastFireSpellHit
 local lastFrostHit
+-- A frost hit this soon after another one needs no update: the chill is still full.
+local FROST_HIT_QUIET = 0.5
 -- Lava hits a swimmer on a steady beat, also in a fight. One fire hit in the water is still a spell.
 -- A fire DoT in a lake has the same beat, so in a fight only a place with hot ground or marked lava has lava.
 local LAVA_BEAT = 2.5 -- seconds between two hits that still count as lava
@@ -480,9 +482,13 @@ function Sensors.IsFrostHit(action, amount, schoolMask)
 		and bit.band(mask, FIRE_MASK) == 0
 end
 
--- A frost spell chills for a moment, in a fight or out of it.
+-- A frost spell chills for a moment, in a fight or out of it. Returns true when the reading needs an update
+-- now: a hit right after another one changes nothing, the chill is still full.
 function Sensors.OnFrostHit()
-	lastFrostHit = GetTime()
+	local now = GetTime()
+	local fresh = not lastFrostHit or now - lastFrostHit >= FROST_HIT_QUIET
+	lastFrostHit = now
+	return fresh
 end
 
 -- Checked one frame after the hit. In a fight or just after it, the hit is a fire spell: returns true.
