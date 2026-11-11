@@ -65,7 +65,7 @@ Open Options, then AddOns, then Feels Like. You can
 | Command | What it does |
 |---|---|
 | `/feels` | Opens the settings |
-| `/feels debug` | Shows everything that affects the current reading |
+| `/feels debug` | Shows everything that affects the current reading, and the state of the gauge frame |
 | `/feels auras` | Lists your buffs, handy for finding what a fire gives you |
 | `/feels test 50` | Points the needle at a value for 30 seconds, from -100 to 100 |
 | `/feels test sweep` | Moves the needle across the whole scale |

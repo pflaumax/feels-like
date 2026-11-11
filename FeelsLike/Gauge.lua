@@ -420,6 +420,58 @@ function Gauge:DescribePosition()
 	return (db.x and "moved" or "default") .. layout .. "; " .. self:Describe(frame)
 end
 
+local function FrameName(target)
+	return target and (target:GetName() or "a frame with no name") or "the screen"
+end
+
+-- What the game says about a frame or a text: seen or not, where it is and what it hangs on.
+local function DescribeRegion(region)
+	local parts = {}
+	if not region:IsShown() then
+		parts[1] = "hidden"
+	elseif not region:IsVisible() then
+		parts[1] = "shown, but its parent is hidden"
+	else
+		parts[1] = "shown"
+	end
+	local x, y = region:GetCenter()
+	if not x then
+		parts[#parts + 1] = "no place on the screen"
+	elseif issecretvalue and issecretvalue(x) then
+		parts[#parts + 1] = "place hidden by the game"
+	else
+		local scale = region:GetEffectiveScale()
+		parts[#parts + 1] = string.format("at %.0f, %.0f", x * scale, y * scale)
+	end
+	local count = region:GetNumPoints()
+	if count == 0 then
+		parts[#parts + 1] = "no anchor"
+	else
+		local point, relativeTo, relativePoint, offsetX, offsetY = region:GetPoint(1)
+		parts[#parts + 1] = string.format("%s on %s of %s, %.0f, %.0f%s", point, relativePoint, FrameName(relativeTo),
+			offsetX, offsetY, count > 1 and ", and " .. (count - 1) .. " more" or "")
+	end
+	return table.concat(parts, ", ")
+end
+
+-- The state of the gauge frame, the label and the minimap, for /feels debug. Another addon can hide or move
+-- a frame, and these lines show it. The place is in screen pixels from the bottom left.
+function Gauge:DescribeFrames()
+	local parent = frame:GetParent()
+	local held = (moving and ", moving with the mouse" or "") .. (frame:IsDragging() and ", dragged" or "")
+	local lines = {
+		string.format("frame: %s, alpha %.2f, scale %.2f, parent %s, %s level %d, mouse %s%s", DescribeRegion(frame),
+			frame:GetEffectiveAlpha(), frame:GetScale(), parent and FrameName(parent) or "none",
+			frame:GetFrameStrata(), frame:GetFrameLevel(), frame:IsMouseEnabled() and "on" or "off", held),
+		string.format("label: %s, alpha %.2f", DescribeRegion(label), label:GetAlpha()),
+	}
+	if Minimap then
+		lines[#lines + 1] = string.format("minimap: %s, %.0f wide, scale %.2f", DescribeRegion(Minimap),
+			Minimap:GetWidth(), Minimap:GetEffectiveScale())
+	end
+	return lines
+end
+
 function Gauge:ResetPosition()
 	db.x = nil
 	db.y = nil

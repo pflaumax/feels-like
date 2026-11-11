@@ -385,6 +385,9 @@ local function PrintDebug()
 	print("  renderer: " .. ns.Gauge.renderer)
 	print("  panel feed: " .. ns.Broker.Describe())
 	print("  position: " .. ns.Gauge:DescribePosition())
+	for _, line in ipairs(ns.Gauge:DescribeFrames()) do
+		print("  " .. line)
+	end
 end
 
 -- Lists the player's buffs to find the campfire aura.

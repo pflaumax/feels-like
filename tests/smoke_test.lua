@@ -35,6 +35,20 @@ local function Widget()
 	widget.SetPoint = function(self, ...) self.point = { ... } end
 	widget.Show = function(self) self.shown = true end
 	widget.Hide = function(self) self.shown = false end
+	-- rawget: a field that is not there reads as a function, see the end of Widget.
+	widget.IsShown = function(self) return self.shown end
+	widget.IsVisible = function(self) return self.shown and not rawget(self, "parentHidden") end
+	widget.GetName = function(self) return rawget(self, "name") end
+	widget.GetParent = function(self) return rawget(self, "parent") end
+	widget.GetNumPoints = function(self) return rawget(self, "point") and 1 or 0 end
+	widget.GetPoint = function(self) return unpack(self.point) end
+	widget.ClearAllPoints = function(self) self.point = nil end
+	widget.GetAlpha = function(self) return rawget(self, "alpha") or 1 end
+	widget.GetEffectiveAlpha = function(self) return rawget(self, "alpha") or 1 end
+	widget.GetFrameStrata = function() return "MEDIUM" end
+	widget.GetFrameLevel = function() return 1 end
+	widget.IsMouseEnabled = function(self) return rawget(self, "mouse") end
+	widget.IsDragging = function() return false end
 	widget.EnableMouse = function(self, enabled) self.mouse = enabled end
 	widget.StartMoving = function(self) self.moving = true end
 	widget.GetEffectiveScale = function() return 1 end
@@ -112,6 +126,7 @@ local function InstallGlobals(forever)
 	_G.DRUNK_MESSAGE_ITEM_SELF3 = "You're feeling drunk off of %s."
 	_G.DRUNK_MESSAGE_ITEM_SELF4 = "You feel completely smashed after that %s."
 	_G.UIParent = Widget()
+	_G.UIParent.name = "UIParent"
 	_G.GameTooltip = Widget()
 	_G.GameTooltip.IsOwned = function() return false end
 	-- The tooltip keeps its lines, the title first.
@@ -124,13 +139,15 @@ local function InstallGlobals(forever)
 	_G.StaticPopup_Show = function(name) world.popup = name end
 	_G.StaticPopup_Hide = function(name) if world.popup == name then world.popup = nil end end
 	_G.ReloadUI = function() world.reloaded = true end
-	_G.CreateFrame = function(_, name)
+	_G.CreateFrame = function(_, name, parent)
 		local frame = Widget()
+		frame.name, frame.parent = name, parent
 		createdFrames[#createdFrames + 1] = frame
 		if name then _G[name] = frame end
 		return frame
 	end
 	_G.Minimap = Widget()
+	_G.Minimap.name = "Minimap"
 	_G.InCombatLockdown = function() return world.combat end
 	_G.GetLocale = function() return clientLocale end
 	_G.UnitIsDeadOrGhost = function() return world.dead end
@@ -442,6 +459,32 @@ check("no resistance API", Slash("debug"):find("resistance, not counted yet: not
 _G.UnitResistance = realResistance
 world.resist = {}
 check("debug shows position", debugText:find("position: default", 1, true), debugText)
+-- The state of the frames, to see what another addon did to them.
+local stateGauge = _G.FeelsLikeGauge
+debugText = Slash("debug")
+check("debug shows the gauge frame", debugText:find("frame: shown, at 500, 300, CENTER on CENTER of Minimap, ", 1, true)
+	and debugText:find(", alpha 1.00, scale 0.53, parent UIParent, MEDIUM level 1, mouse on", 1, true), debugText)
+check("debug shows the label", debugText:find("label: hidden, at 500, 300, TOP on BOTTOM of FeelsLikeGauge, 0, -1, alpha 1.00", 1, true), debugText)
+check("debug shows the minimap", debugText:find("minimap: shown, at 500, 300, no anchor, 198 wide, scale 1.00", 1, true), debugText)
+stateGauge:Hide()
+stateGauge.alpha = 0
+local realCenter = stateGauge.GetCenter
+stateGauge.GetCenter = function() end
+stateGauge.point = nil
+debugText = Slash("debug")
+check("debug shows a hidden gauge with no place", debugText:find("frame: hidden, no place on the screen, no anchor, alpha 0.00", 1, true), debugText)
+stateGauge.GetCenter = function() return 15, 15 end
+local realSecret = _G.issecretvalue
+_G.issecretvalue = function(value) return value == 15 end
+check("debug shows a place the game hides", Slash("debug"):find("frame: hidden, place hidden by the game", 1, true))
+_G.issecretvalue = realSecret
+stateGauge.GetCenter = realCenter
+stateGauge:Show()
+stateGauge.alpha = nil
+stateGauge.parentHidden = true
+check("debug shows a hidden parent", Slash("debug"):find("frame: shown, but its parent is hidden", 1, true))
+stateGauge.parentHidden = nil
+ns.Gauge:ApplyPosition()
 -- A point next to the minimap.
 local gaugeForPosition = _G.FeelsLikeGauge
 gaugeForPosition.GetCenter = function() return 450, 250 end
