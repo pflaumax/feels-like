@@ -12,6 +12,7 @@ Locale.lua
 Locale\uk.lua
 Locale\de.lua
 Locale\fr.lua
+Locale\es.lua
 Data\Zones.lua
 Data\Instances.lua
 Data\Races.lua

@@ -1933,6 +1933,15 @@ _G.FeelsLikeGauge.scripts.OnEnter()
 check("french tooltip", table.concat(GameTooltip.lines, " | ")
 	== "Glacial | Pourquoi : |cff8fd9f0un lieu froid, la neige, la nuit|r | Maj + glisser pour déplacer", table.concat(GameTooltip.lines, " | "))
 _G.FeelsLikeGauge.scripts.OnLeave()
+-- Spain and Latin America share the Spanish text.
+clientLocale = "esMX"
+ns = LoadAddon(true, { label = "always" })
+check("a latin american game starts in spanish", FeelsLikeDB.language == "es", FeelsLikeDB.language)
+Tick(10)
+_G.FeelsLikeGauge.scripts.OnEnter()
+check("spanish tooltip", table.concat(GameTooltip.lines, " | ")
+	== "Gélido | Motivo: |cff8fd9f0un lugar frío, la nieve, la noche|r | Mayús + arrastrar para mover", table.concat(GameTooltip.lines, " | "))
+_G.FeelsLikeGauge.scripts.OnLeave()
 clientLocale = "enUS"
 ns = LoadAddon(true, { language = "en", version = 2 })
 check("english stays english in an english game", FeelsLikeDB.language == "en", FeelsLikeDB.language)
