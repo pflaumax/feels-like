@@ -10,6 +10,7 @@
 Model.lua
 Locale.lua
 Locale\uk.lua
+Locale\de.lua
 Data\Zones.lua
 Data\Instances.lua
 Data\Races.lua

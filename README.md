@@ -55,7 +55,7 @@ Open Options, then AddOns, then Feels Like. You can
 - choose how the undead feel: numb or like the living
 - turn seasons and holidays on or off
 - turn the lines in chat on or off
-- pick the language: English or Ukrainian
+- pick the language: English, Ukrainian or German
 - lock the gauge in place
 - change its size
 - put it back by the minimap
@@ -89,7 +89,9 @@ Open Options, then AddOns, then Feels Like. You can
 
 **Does it work with Titan Panel?** Yes. With Titan Panel, ChocolateBar or any other panel that shows LibDataBroker feeds, Feels Like puts its word there too. Hover it for the reasons and click it for the settings.
 
-**Which languages?** English and Ukrainian. Pick the language in the settings: it changes the word, the tooltip and the lines in chat at once. The settings page changes after a reload, and a window offers one right away. `/feels debug` stays English. Want another language? Send me the translated lines.
+**Which languages?** English, Ukrainian and German. The addon starts in your game's language when it has a translation for it, and you can pick another one in the settings: it changes the word, the tooltip and the lines in chat at once. The settings page changes after a reload, and a window offers one right away. `/feels debug` stays English.
+
+**Translations welcome.** Found a line that sounds wrong in your language, or want a new one? Open an issue or a pull request. [TRANSLATING.md](TRANSLATING.md) has the rules and the list of texts.
 
 **Which versions of the game?** It's made for WoW Forever. It also loads on Retail, but there only a few old zones have a climate, so most places read as Mild.
 

@@ -11,7 +11,8 @@ ns.DEFAULTS = {
 	undead = "numb",
 	flavor = true,
 	seasons = true,
-	language = ns.Locale.DEFAULT,
+	-- The game's own language, if there is a translation for it.
+	language = ns.Locale.ForClient(GetLocale()),
 	-- Default gauge size for Forever and Retail.
 	scale = ns.Sensors.isForever and 0.53 or 0.45,
 }
@@ -87,7 +88,7 @@ function ns.SetLanguage(language)
 end
 
 -- Version of the saved settings.
-local DB_VERSION = 2
+local DB_VERSION = 3
 -- Default scale of version 0.1.0.
 local OLD_DEFAULT_SCALE = 0.45
 
@@ -95,6 +96,10 @@ local function InitDB()
 	FeelsLikeDB = FeelsLikeDB or {}
 	if (FeelsLikeDB.version or 1) < 2 and FeelsLikeDB.scale == OLD_DEFAULT_SCALE then
 		FeelsLikeDB.scale = nil
+	end
+	-- Before version 3 English was the default for everyone, so a saved English was no choice.
+	if (FeelsLikeDB.version or 1) < 3 and FeelsLikeDB.language == ns.Locale.DEFAULT then
+		FeelsLikeDB.language = nil
 	end
 	FeelsLikeDB.version = DB_VERSION
 	-- A language that is gone goes back to the default.

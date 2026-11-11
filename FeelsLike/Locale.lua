@@ -1,5 +1,6 @@
 -- Languages. The English text is the key, so a text with no translation stays English.
--- The game has no Ukrainian client, so the language is a setting and does not follow the game's own.
+-- The language is a setting. Its default follows the game's own language when there is a translation for it.
+-- The game has no Ukrainian client, so Ukrainian is always picked by hand.
 
 local _, ns = ...
 
@@ -14,13 +15,23 @@ Locale.language = Locale.DEFAULT
 Locale.missing = {}
 
 local tables = {}
+local byClient = {} -- the game's language, like "deDE", to ours
 local current
 
--- Adds a language. texts maps each English text to its translation.
-function Locale.Add(language, name, texts)
+-- Adds a language. texts maps each English text to its translation. clients lists the game languages it is
+-- the default for, like { "esES", "esMX" }.
+function Locale.Add(language, name, texts, clients)
 	tables[language] = texts
 	Locale.names[language] = name
 	Locale.order[#Locale.order + 1] = language
+	for _, client in ipairs(clients or {}) do
+		byClient[client] = language
+	end
+end
+
+-- The language for a game client, like "de" for "deDE". English without a translation.
+function Locale.ForClient(client)
+	return byClient[client] or Locale.DEFAULT
 end
 
 function Locale.Has(language)

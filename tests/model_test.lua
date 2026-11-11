@@ -512,16 +512,30 @@ check("back inside clears it", Model.SettleShelter(memory, "inn", 22), "inn")
 check("new pending starts over", Model.SettleShelter(memory, "outdoors", 23), "inn")
 check("outdoors after 2 s", Model.SettleShelter(memory, "outdoors", 25), "outdoors")
 
--- Languages: every word and every line in chat has a Ukrainian text.
-for _, file in ipairs({ "Locale.lua", "Locale/uk.lua", "Flavor.lua" }) do
-	assert(loadfile("FeelsLike/" .. file))("FeelsLike", ns)
+-- Languages: every word and every line in chat has a text in every language.
+local LANGUAGES = {
+	{ code = "uk", name = "Українська", cold = "Холодно" },
+	{ code = "de", name = "Deutsch", cold = "Kalt", clients = { "deDE" } },
+}
+assert(loadfile("FeelsLike/Locale.lua"))("FeelsLike", ns)
+-- Keeps each table, to compare them.
+local added = {}
+local add = ns.Locale.Add
+ns.Locale.Add = function(language, name, texts, clients)
+	added[language] = texts
+	add(language, name, texts, clients)
 end
+local order = { "en" }
+for _, language in ipairs(LANGUAGES) do
+	assert(loadfile("FeelsLike/Locale/" .. language.code .. ".lua"))("FeelsLike", ns)
+	order[#order + 1] = language.code
+end
+assert(loadfile("FeelsLike/Flavor.lua"))("FeelsLike", ns)
 check("english is the default", ns.T("Cold"), "Cold")
 check("an unknown language is english", (function() ns.Locale.Set("xx") return ns.Locale.language .. ns.T("Cold") end)(), "enCold")
-check("ukrainian is listed with its own name", ns.Locale.names.uk, "Українська")
-check("the languages in the settings", table.concat(ns.Locale.order, ","), "en,uk")
-ns.Locale.Set("uk")
-check("ukrainian word", ns.T("Cold"), "Холодно")
+check("the languages in the settings", table.concat(ns.Locale.order, ","), table.concat(order, ","))
+check("an english game is english", ns.Locale.ForClient("enUS"), "en")
+check("a game language with no translation is english", ns.Locale.ForClient("koKR"), "en")
 local texts = { "Freezing", "Cold", "Mild", "Warm", "Hot", "Scorching", "Cozy", "Why",
 	"your fur", "your race", "dead flesh" }
 for _, word in ipairs(Model.REASON_WORDS) do
@@ -537,11 +551,65 @@ for _, set in ipairs(ns.Flavor.SETS) do
 	end
 end
 check("the chat lines were found", lineCount, 60)
-for _, text in ipairs(texts) do
-	local translated = ns.T(text)
-	check("ukrainian for: " .. text, translated ~= text and translated ~= "", true)
+
+-- Letters, not bytes.
+local function Length(text)
+	return select(2, text:gsub("[^\128-\191]", ""))
 end
-check("no text without a translation", next(ns.Locale.missing), nil)
+-- The last sign of a sentence. French puts a space before "!" and "?", and that changes nothing here.
+local function Ending(text)
+	return text:match("[%.!%?%)]$") or ""
+end
+local STATUS_WORDS = { "Freezing", "Cold", "Mild", "Warm", "Hot", "Scorching", "Cozy" }
+-- A text that names other texts has to name them as they are translated.
+local NAMES_INSIDE = {
+	["The status is one word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."] = STATUS_WORDS,
+	["Only for undead characters, while Feel by race is on. Numb: dead flesh hardly feels the weather, but it fears fire: a fire spell in a fight scorches it for a moment. Like the living: they feel the weather like a human."] =
+		{ "Feel by race", "Numb", "Like the living" },
+}
+-- What a player types stays as it is in every language.
+local KEPT = { "/shiver", "/feels test off", "/feels", "/reload", "Feels Like" }
+
+for _, language in ipairs(LANGUAGES) do
+	local code = language.code
+	local own = added[code]
+	check(code .. " is listed with its own name", ns.Locale.names[code], language.name)
+	for _, client in ipairs(language.clients or {}) do
+		check(code .. " is the default for " .. client, ns.Locale.ForClient(client), code)
+	end
+	ns.Locale.Set(code)
+	check(code .. " word", ns.T("Cold"), language.cold)
+	for _, text in ipairs(texts) do
+		local translated = ns.T(text)
+		-- The same word as English is fine: Mild and Warm are German too.
+		check(code .. " for: " .. text, own[text] ~= nil and translated == own[text] and translated ~= "", true)
+	end
+	check(code .. ": no text without a translation", next(ns.Locale.missing), nil)
+	-- The same texts as Ukrainian, the first translation: none forgotten and none left over.
+	for text in pairs(added.uk) do
+		check(code .. " has: " .. text, own[text] ~= nil, true)
+	end
+	for text, translated in pairs(own) do
+		check(code .. " knows: " .. text, added.uk[text] ~= nil, true)
+		check(code .. " is tidy: " .. text, translated ~= "" and not translated:find("^%s") and not translated:find("%s$")
+			and not translated:find("  ", 1, true), true)
+		check(code .. " ends like english: " .. text, Ending(translated), Ending(text))
+		for _, kept in ipairs(KEPT) do
+			if text:find(kept, 1, true) then
+				check(code .. " keeps " .. kept .. ": " .. text, translated:find(kept, 1, true) ~= nil, true)
+			end
+		end
+	end
+	-- The status sits next to a small gauge.
+	for _, word in ipairs(STATUS_WORDS) do
+		check(code .. " status is short: " .. word, Length(own[word]) <= 12, true)
+	end
+	for text, names in pairs(NAMES_INSIDE) do
+		for _, name in ipairs(names) do
+			check(code .. " names " .. name .. " as translated", own[text]:find(own[name], 1, true) ~= nil, true)
+		end
+	end
+end
 check("a text with no translation stays english", ns.T("no such text"), "no such text")
 check("and it is noted", ns.Locale.missing["no such text"], true)
 ns.Locale.Set("en")

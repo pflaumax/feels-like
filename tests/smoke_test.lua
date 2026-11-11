@@ -82,6 +82,9 @@ local chatLines = {}
 local timers, tickers = {}, {}
 local loadedCallback
 
+-- The language of the game client.
+local clientLocale = "enUS"
+
 local function InstallGlobals(forever)
 	_G.print = function(...) local parts = {} for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end printed[#printed + 1] = table.concat(parts, " ") end
 	_G.strtrim = function(s) return (s:gsub("^%s+", ""):gsub("%s+$", "")) end
@@ -129,6 +132,7 @@ local function InstallGlobals(forever)
 	end
 	_G.Minimap = Widget()
 	_G.InCombatLockdown = function() return world.combat end
+	_G.GetLocale = function() return clientLocale end
 	_G.UnitIsDeadOrGhost = function() return world.dead end
 	_G.UnitIsFeignDeath = function() return world.feign end
 	_G.GetTime = function() return world.time end
@@ -1551,7 +1555,7 @@ _G.Minimap.GetWidth = nil
 
 -- Old saved scale.
 ns = LoadAddon(true, { scale = 0.45, unit = "F" })
-check("old default scale moves to the new one", FeelsLikeDB.scale == 0.53 and FeelsLikeDB.version == 2, FeelsLikeDB.scale)
+check("old default scale moves to the new one", FeelsLikeDB.scale == 0.53 and FeelsLikeDB.version == 3, FeelsLikeDB.scale)
 check("other saved settings stay", FeelsLikeDB.unit == "F")
 ns = LoadAddon(true, { scale = 0.6 })
 check("a chosen scale stays", FeelsLikeDB.scale == 0.6, FeelsLikeDB.scale)
@@ -1901,6 +1905,28 @@ end
 check("every text shown has a ukrainian one", #missing == 0, table.concat(missing, " / "))
 ns = LoadAddon(true, { language = "klingon" })
 check("an unknown saved language is english", FeelsLikeDB.language == "en", FeelsLikeDB.language)
+
+-- A German game: German with no choice saved, and a choice stays.
+clientLocale = "deDE"
+ns = LoadAddon(true, { label = "always" })
+check("a german game starts in german", FeelsLikeDB.language == "de", FeelsLikeDB.language)
+Tick(10)
+check("german word next to the gauge", fontStrings.GameFontHighlightSmall.text == "Eisig", fontStrings.GameFontHighlightSmall.text)
+_G.FeelsLikeGauge.scripts.OnEnter()
+check("german tooltip", table.concat(GameTooltip.lines, " | ")
+	== "Eisig | Warum: |cff8fd9f0ein kalter Ort, Schnee, die Nacht|r | Umschalt + Ziehen zum Verschieben", table.concat(GameTooltip.lines, " | "))
+_G.FeelsLikeGauge.scripts.OnLeave()
+ns = LoadAddon(true, { language = "en", version = 2 })
+check("english saved before there was a choice of german follows the game", FeelsLikeDB.language == "de", FeelsLikeDB.language)
+ns = LoadAddon(true, { language = "en", version = 3 })
+check("english chosen in a german game stays", FeelsLikeDB.language == "en", FeelsLikeDB.language)
+ns = LoadAddon(true, { language = "uk", version = 2 })
+check("ukrainian chosen in a german game stays", FeelsLikeDB.language == "uk", FeelsLikeDB.language)
+ns = LoadAddon(true, { language = "klingon" })
+check("an unknown saved language follows the game", FeelsLikeDB.language == "de", FeelsLikeDB.language)
+clientLocale = "enUS"
+ns = LoadAddon(true, { language = "en", version = 2 })
+check("english stays english in an english game", FeelsLikeDB.language == "en", FeelsLikeDB.language)
 
 -- An undead in Tirisfal Glades, a cool place: by day it is Mild whatever the race settings say, and the
 -- reasons of a Mild reading start with the side that wins.
