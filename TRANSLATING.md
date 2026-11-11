@@ -9,8 +9,7 @@ Translations are welcome: a new language, or a better word for one line. A nativ
 | German | `FeelsLike/Locale/de.lua` | new, a native review is welcome |
 | French | `FeelsLike/Locale/fr.lua` | new, a native review is welcome |
 | Spanish | `FeelsLike/Locale/es.lua` | new, one text for Spain and Latin America, a native review is welcome |
-
-Brazilian Portuguese comes next.
+| Portuguese | `FeelsLike/Locale/pt.lua` | new, Brazilian, a native review is welcome |
 
 ## How to help
 

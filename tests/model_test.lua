@@ -518,6 +518,7 @@ local LANGUAGES = {
 	{ code = "de", name = "Deutsch", cold = "Kalt", clients = { "deDE" } },
 	{ code = "fr", name = "Français", cold = "Froid", clients = { "frFR" } },
 	{ code = "es", name = "Español", cold = "Frío", clients = { "esES", "esMX" } },
+	{ code = "pt", name = "Português", cold = "Frio", clients = { "ptBR" } },
 }
 assert(loadfile("FeelsLike/Locale.lua"))("FeelsLike", ns)
 -- Keeps each table, to compare them.
