@@ -1,12 +1,39 @@
-# Feels Like
+<p align="center">
+  <img src=".github/media/icon.png" alt="Feels Like icon" width="128">
+</p>
 
-**[Download FeelsLike.zip](https://github.com/pflaumax/feels-like/releases/latest/download/FeelsLike.zip)** or see [how to install](#installation).
+<h1 align="center">Feels Like</h1>
 
-A tiny thermometer for World of Warcraft. It sits by your minimap, and the needle shows how hot or cold your character feels right now.
+<p align="center">
+  <a href="https://github.com/pflaumax/feels-like/releases/latest"><img src="https://img.shields.io/github/v/release/pflaumax/feels-like" alt="GitHub release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/pflaumax/feels-like" alt="License"></a>
+</p>
+
+<p align="center">
+  A tiny roleplay thermometer for World of Warcraft.<br>
+  It sits by your minimap, and the needle shows how hot or cold your character feels right now.
+</p>
+
+<p align="center">
+  <a href="https://github.com/pflaumax/feels-like/releases/latest/download/FeelsLike.zip"><b>Download</b></a> ·
+  <a href="https://www.curseforge.com/wow/addons/feels-like">CurseForge</a> ·
+  <a href="#installation">Install</a> ·
+  <a href="#commands">Commands</a> ·
+  <a href="#faq">FAQ</a> ·
+  <a href="TRANSLATING.md">Translate</a>
+</p>
+
+<p align="center">
+  <img src=".github/media/sweep.gif" alt="The needle moves from Freezing to Scorching" width="220">
+</p>
 
 I always loved the little thermometer in Breath of the Wild, and I wanted that feeling in WoW too. Freezing in Dun Morogh, warming up by a campfire, carrying a torch through a cold night. It's made for roleplay and atmosphere and never changes gameplay.
 
+Made for WoW Forever. Speaks English, Ukrainian, German, French, Spanish and Brazilian Portuguese.
+
 ## What changes how you feel
+
+### The world
 
 **Zone.** Every zone has its own climate. Dun Morogh is cold, Tanaris is scorching and Elwynn is mild. In humid jungles and swamps like Stranglethorn and Un'Goro the heat feels stronger. Some places are special, like the hot springs of Winterspring, the lava of the Cauldron or Molten Core.
 
@@ -18,9 +45,17 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 **Shelter.** A building feels like a warm room. It's cooler than a hot day outside and warmer than a freezing night. An inn feels cozy. In the snow a cave or a cold house only keeps the wind out. Volcanic heat comes from the ground, so a roof doesn't help there.
 
+### Warming up
+
 **Campfire.** Sit by a fire to warm up and feel cozy, including the new camp fires in Forever. Once you sat down, you can get up and walk around the fire and still stay warm. A fire makes you warm but never hot.
 
 **Torch.** Light the Night Watchman's Torch or hold a lit torch, and a cold night gets a bit warmer.
+
+**Fight.** A fight warms you up a little. The warmth builds over the first seconds and fades when the fight is over. Like a fire, it makes you warm but never hot.
+
+**Drink.** Get tipsy and a cold night feels a little warmer. The more you drink, the warmer, but never past Mild, and the heat stays the same. The addon follows the game's own lines like "You feel tipsy. Whee!", so it works in every language.
+
+### Fire, frost and water
 
 **Fire underfoot.** Step into a campfire or lava and the needle jumps to the very top of the scale. No weather takes it that far. Fire spells from enemies don't count, except for the undead (see Race). In a fight, and for a few seconds after it, the game can't tell a fire underfoot from a fire spell, so only lava in volcanic places counts then.
 
@@ -28,15 +63,17 @@ I always loved the little thermometer in Breath of the Wild, and I wanted that f
 
 **Water.** A swim chills you. It's cold in a mild zone, freezing in the snow and just refreshing in a desert. Your clothes dry over time, and faster when it's warm. Hot springs are the exception: a swim there doesn't chill you.
 
+### Your character
+
 **Race.** Dwarves handle the cold better. Tauren handle the cold too but feel the heat more, and trolls the other way round. The undead hardly feel either, but they fear fire: a fire spell in a fight scorches them for a moment. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren. A fire still warms every race only up to Warm, and fire underfoot burns everyone alike. You can turn this off in the settings.
-
-**Fight.** A fight warms you up a little. The warmth builds over the first seconds and fades when the fight is over. Like a fire, it makes you warm but never hot.
-
-**Drink.** Get tipsy and a cold night feels a little warmer. The more you drink, the warmer, but never past Mild, and the heat stays the same. The addon follows the game's own lines like "You feel tipsy. Whee!", so it works in every language.
 
 **Death.** While you are dead, a ghost or a wisp, you feel Cold, the same everywhere, until you are back.
 
 ## Reading the gauge
+
+<p align="center">
+  <img src=".github/media/banner.png" alt="The gauge from Freezing to Scorching" width="720">
+</p>
 
 Blue on the left means cold and red on the right means hot. Near the ends the ring turns icy or glows red. Hover the gauge to see its status, one word next to it like Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy, and a tooltip that says why, like "Why: a cold place, snow".
 
@@ -75,29 +112,65 @@ Open Options, then AddOns, then Feels Like. You can
 
 ## Installation
 
-1. [Download FeelsLike.zip](https://github.com/pflaumax/feels-like/releases/latest/download/FeelsLike.zip) or install it from CurseForge.
+1. [Download FeelsLike.zip](https://github.com/pflaumax/feels-like/releases/latest/download/FeelsLike.zip) or install it from [CurseForge](https://www.curseforge.com/wow/addons/feels-like).
 2. Unzip it into your AddOns folder, so you get `Interface/AddOns/FeelsLike/FeelsLike.toc`. On Windows "Extract All" adds one more folder around it, so move the inner `FeelsLike` folder.
 3. Start the game and check that Feels Like is enabled in the AddOns list.
 
 ## FAQ
 
-**Does it change gameplay?** No. It only shows a gauge.
+<details>
+<summary><b>Does it change gameplay?</b></summary>
 
-**Does the cold slow me down?** No. Addons can't change your stats, your speed or your health, and Feels Like wouldn't if it could. The cold is for your roleplay.
+No. It only shows a gauge.
+</details>
 
-**Does it need other addons?** No. It also works with ClassicUI Forever.
+<details>
+<summary><b>Does the cold slow me down?</b></summary>
 
-**Does it work with Titan Panel?** Yes. With Titan Panel, ChocolateBar or any other panel that shows LibDataBroker feeds, Feels Like puts its word there too. Hover it for the reasons and click it for the settings.
+No. Addons can't change your stats, your speed or your health, and Feels Like wouldn't if it could. The cold is for your roleplay.
+</details>
 
-**Which languages?** English, Ukrainian, German, French, Spanish and Brazilian Portuguese. The addon starts in your game's language when it has a translation for it, and you can pick another one in the settings: it changes the word, the tooltip and the lines in chat at once. The settings page changes after a reload, and a window offers one right away. `/feels debug` stays English.
+<details>
+<summary><b>Does it need other addons?</b></summary>
 
-**Translations welcome.** Found a line that sounds wrong in your language, or want a new one? Open an issue or a pull request. [TRANSLATING.md](TRANSLATING.md) has the rules and the list of texts.
+No. It also works with ClassicUI Forever.
+</details>
 
-**Which versions of the game?** It's made for WoW Forever. It also loads on Retail, but there only a few old zones have a climate, so most places read as Mild.
+<details>
+<summary><b>Does it work with Titan Panel?</b></summary>
 
-**My undead should feel the cold.** Pick Like the living under Undead feel in the settings, and your undead feels the weather like a human. The default is Numb: dead flesh hardly feels the weather.
+Yes. With Titan Panel, ChocolateBar or any other panel that shows LibDataBroker feeds, Feels Like puts its word there too. Hover it for the reasons and click it for the settings.
+</details>
 
-**A zone feels wrong.** Stand there, type `/feels debug` and send me what it prints. Ideas for what should make you colder or warmer are always welcome too.
+<details>
+<summary><b>Which languages?</b></summary>
+
+English, Ukrainian, German, French, Spanish and Brazilian Portuguese. The addon starts in your game's language when it has a translation for it, and you can pick another one in the settings: it changes the word, the tooltip and the lines in chat at once. The settings page changes after a reload, and a window offers one right away. `/feels debug` stays English.
+</details>
+
+<details>
+<summary><b>Can I help with a translation?</b></summary>
+
+Yes, translations are welcome. Found a line that sounds wrong in your language, or want a new one? Open an issue or a pull request. [TRANSLATING.md](TRANSLATING.md) has the rules and the list of texts.
+</details>
+
+<details>
+<summary><b>Which versions of the game?</b></summary>
+
+It's made for WoW Forever. It also loads on Retail, but there only a few old zones have a climate, so most places read as Mild.
+</details>
+
+<details>
+<summary><b>My undead should feel the cold.</b></summary>
+
+Pick Like the living under Undead feel in the settings, and your undead feels the weather like a human. The default is Numb: dead flesh hardly feels the weather.
+</details>
+
+<details>
+<summary><b>A zone feels wrong.</b></summary>
+
+Stand there, type `/feels debug` and send me what it prints. Ideas for what should make you colder or warmer are always welcome too.
+</details>
 
 ## For addon authors
 
@@ -121,8 +194,8 @@ tools        scripts that build the art and the release zip
 tests        tests that run outside the game
 ```
 
-Not affiliated with Nintendo or Blizzard. The gauge is drawn as vector graphics, so it stays sharp at any size.
+The gauge is drawn as vector graphics, so it stays sharp at any size.
 
 ## License
 
-MIT, see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE). Not affiliated with Nintendo or Blizzard.
