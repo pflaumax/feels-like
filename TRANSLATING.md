@@ -7,8 +7,9 @@ Translations are welcome: a new language, or a better word for one line. A nativ
 | English | the keys in the code | the source |
 | Ukrainian | `FeelsLike/Locale/uk.lua` | by a native speaker |
 | German | `FeelsLike/Locale/de.lua` | new, a native review is welcome |
+| French | `FeelsLike/Locale/fr.lua` | new, a native review is welcome |
 
-French, Spanish and Brazilian Portuguese come next.
+Spanish and Brazilian Portuguese come next.
 
 ## How to help
 
@@ -24,7 +25,7 @@ French, Spanish and Brazilian Portuguese come next.
 5. **Reasons are short names of things.** The tooltip puts them in a list: "Why: a cold place, snow, the night". Each has to read well there, with any other reason next to it.
 6. **The status is one short word**, 12 letters at most: it sits next to a small gauge.
 7. **Keep what a player types**: `/feels`, `/reload`, `/shiver` and the name Feels Like.
-8. **End a line as the English one ends**: with a full stop, an exclamation mark or nothing.
+8. **End a line as the English one ends**: with a full stop, an exclamation mark or nothing. Inside the line use the punctuation of your language: French puts a space before `:`, `!` and `?` and uses « » for names.
 
 ## Check your work
 

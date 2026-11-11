@@ -13,7 +13,7 @@ ns.Locale.Add("de", "Deutsch", {
 	["Cozy"] = "Gemütlich",
 
 	-- Tooltip.
-	["Why"] = "Warum",
+	["Why:"] = "Warum:",
 	["Shift-drag to move"] = "Umschalt + Ziehen zum Verschieben",
 	["A test value. /feels test off ends it."] = "Ein Testwert. /feels test off beendet ihn.",
 	["Click to open the settings"] = "Klicken, um die Einstellungen zu öffnen",

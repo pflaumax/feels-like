@@ -138,7 +138,8 @@ function Gauge.ReasonLine(colder, warmer, warmFirst)
 	if #parts == 0 then
 		return nil
 	end
-	return T("Why") .. ": " .. table.concat(parts, ", ")
+	-- The colon is in the text: French puts a space before it.
+	return T("Why:") .. " " .. table.concat(parts, ", ")
 end
 
 -- The tooltip opens toward the middle of the screen, away from the edge the gauge sits by.

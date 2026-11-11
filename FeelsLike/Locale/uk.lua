@@ -13,7 +13,7 @@ ns.Locale.Add("uk", "Українська", {
 	["Cozy"] = "Затишно",
 
 	-- Tooltip.
-	["Why"] = "Чому",
+	["Why:"] = "Чому:",
 	["Shift-drag to move"] = "Shift + тягни, щоб пересунути",
 	["A test value. /feels test off ends it."] = "Тестове значення. /feels test off вимикає його.",
 	["Click to open the settings"] = "Клацни, щоб відкрити налаштування",

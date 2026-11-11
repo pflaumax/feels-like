@@ -516,6 +516,7 @@ check("outdoors after 2 s", Model.SettleShelter(memory, "outdoors", 25), "outdoo
 local LANGUAGES = {
 	{ code = "uk", name = "Українська", cold = "Холодно" },
 	{ code = "de", name = "Deutsch", cold = "Kalt", clients = { "deDE" } },
+	{ code = "fr", name = "Français", cold = "Froid", clients = { "frFR" } },
 }
 assert(loadfile("FeelsLike/Locale.lua"))("FeelsLike", ns)
 -- Keeps each table, to compare them.
@@ -536,7 +537,7 @@ check("an unknown language is english", (function() ns.Locale.Set("xx") return n
 check("the languages in the settings", table.concat(ns.Locale.order, ","), table.concat(order, ","))
 check("an english game is english", ns.Locale.ForClient("enUS"), "en")
 check("a game language with no translation is english", ns.Locale.ForClient("koKR"), "en")
-local texts = { "Freezing", "Cold", "Mild", "Warm", "Hot", "Scorching", "Cozy", "Why",
+local texts = { "Freezing", "Cold", "Mild", "Warm", "Hot", "Scorching", "Cozy", "Why:",
 	"your fur", "your race", "dead flesh" }
 for _, word in ipairs(Model.REASON_WORDS) do
 	texts[#texts + 1] = word

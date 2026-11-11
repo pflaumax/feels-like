@@ -1924,6 +1924,15 @@ ns = LoadAddon(true, { language = "uk", version = 2 })
 check("ukrainian chosen in a german game stays", FeelsLikeDB.language == "uk", FeelsLikeDB.language)
 ns = LoadAddon(true, { language = "klingon" })
 check("an unknown saved language follows the game", FeelsLikeDB.language == "de", FeelsLikeDB.language)
+-- A French game. French puts a space before the colon.
+clientLocale = "frFR"
+ns = LoadAddon(true, { label = "always" })
+check("a french game starts in french", FeelsLikeDB.language == "fr", FeelsLikeDB.language)
+Tick(10)
+_G.FeelsLikeGauge.scripts.OnEnter()
+check("french tooltip", table.concat(GameTooltip.lines, " | ")
+	== "Glacial | Pourquoi : |cff8fd9f0un lieu froid, la neige, la nuit|r | Maj + glisser pour déplacer", table.concat(GameTooltip.lines, " | "))
+_G.FeelsLikeGauge.scripts.OnLeave()
 clientLocale = "enUS"
 ns = LoadAddon(true, { language = "en", version = 2 })
 check("english stays english in an english game", FeelsLikeDB.language == "en", FeelsLikeDB.language)
