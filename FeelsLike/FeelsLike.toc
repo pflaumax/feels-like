@@ -2,7 +2,7 @@
 ## Title: Feels Like
 ## Notes: A tiny thermometer that shows how hot or cold your character feels.
 ## Author: fau2
-## Version: 0.3.0
+## Version: 0.3.1
 ## Category: Roleplay
 ## IconTexture: Interface\AddOns\FeelsLike\Media\Icon
 ## SavedVariables: FeelsLikeDB
