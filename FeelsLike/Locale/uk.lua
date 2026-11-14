@@ -55,6 +55,8 @@ ns.Locale.Add("uk", "Українська", {
 	["hold Shift and drag to move the gauge."] = "затисни Shift і тягни, щоб пересунути датчик.",
 	["the gauge is locked. Unlock it in the settings: /feels"] = "датчик закріплено. Відкріпи його в налаштуваннях: /feels",
 	["settings open after combat."] = "налаштування відкриються після бою.",
+	["settings open after the boss fight, the Challenge Mode run or the PvP match."] =
+		"налаштування відкриються після бою з босом, режиму випробування або PvP-матчу.",
 	["type /reload to change the settings page too."] = "введи /reload, щоб змінити й сторінку налаштувань.",
 
 	-- Settings.

@@ -9,8 +9,13 @@ ns.Options = Options
 local SCALE_MIN = 0.3
 local SCALE_MAX = 2
 local SCALE_STEP = 0.01
--- The window that offers a reload after the language changed.
-local RELOAD_POPUP = "FEELSLIKE_RELOAD"
+-- The window that offers a reload after the language changed, sized like the game's own windows.
+local WINDOW_WIDTH = 320
+local WINDOW_PADDING = 16
+local BUTTON_WIDTH, BUTTON_HEIGHT = 128, 21
+local BUTTON_TEXT_PADDING = 24 -- a longer word makes the button wider
+local BUTTON_GAP = 12
+local window
 
 local function UnitOptions()
 	local container = Settings.CreateControlTextContainer()
@@ -129,31 +134,67 @@ function Options:Register(db)
 	self.language = ns.Locale.language
 end
 
+-- The window is the addon's own. The game's StaticPopup windows also ask the game's own questions, like deleting
+-- an item or a group invite, and one shown by addon code can make the game block the answer to the next one.
+-- Escape does not close it: an addon frame in UISpecialFrames or in the game's Escape handlers taints the game
+-- menu. It sits over the settings page, in the middle of the screen and one strata under the game's own
+-- windows, which start at the top of the screen: a question of the game shows over it.
+local function ReloadWindow()
+	if window then
+		return window
+	end
+	window = CreateFrame("Frame", "FeelsLikeReloadWindow", UIParent)
+	window:SetSize(WINDOW_WIDTH, 2 * WINDOW_PADDING + BUTTON_HEIGHT)
+	window:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+	window:SetFrameStrata("HIGH") -- the strata of the settings page
+	window:SetToplevel(true)
+	window:SetClampedToScreen(true)
+	window:EnableMouse(true) -- a click on the window does not go through to the world
+	local border = CreateFrame("Frame", nil, window, "DialogBorderTemplate")
+	border:SetAllPoints()
+	window.text = window:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+	window.text:SetPoint("TOP", 0, -WINDOW_PADDING)
+	window.text:SetWidth(WINDOW_WIDTH - 2 * WINDOW_PADDING)
+	window.reload = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+	window.reload:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
+	window.reload.fitTextWidthPadding = BUTTON_TEXT_PADDING
+	window.reload:SetPoint("BOTTOMRIGHT", window, "BOTTOM", -BUTTON_GAP / 2, WINDOW_PADDING)
+	window.reload:SetScript("OnClick", function()
+		ReloadUI()
+	end)
+	window.later = CreateFrame("Button", nil, window, "UIPanelButtonTemplate")
+	window.later:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT)
+	window.later.fitTextWidthPadding = BUTTON_TEXT_PADDING
+	window.later:SetPoint("BOTTOMLEFT", window, "BOTTOM", BUTTON_GAP / 2, WINDOW_PADDING)
+	window.later:SetScript("OnClick", function()
+		window:Hide()
+	end)
+	window:Hide()
+	return window
+end
+
 -- After the language changed: the settings page still shows the old one, so offer a reload in a window.
 -- Back to the language of the page, the window goes away.
 function Options:OfferReload()
-	if not (StaticPopupDialogs and StaticPopup_Show) then
-		ns.Print(T("type /reload to change the settings page too."))
-		return
-	elseif ns.Locale.language == self.language then
-		StaticPopup_Hide(RELOAD_POPUP)
+	if ns.Locale.language == self.language then
+		if window then
+			window:Hide()
+		end
 		return
 	end
-	-- Built again each time, so it speaks the new language.
-	StaticPopupDialogs[RELOAD_POPUP] = {
-		text = T("Feels Like: the language changed. The status, the tooltip and the lines in chat have changed already. The settings page changes after a reload of the interface. Reload now?"),
-		button1 = T("Reload"),
-		button2 = T("Later"),
-		OnAccept = function()
-			ReloadUI()
-		end,
-		timeout = 0,
-		whileDead = true,
-		hideOnEscape = true,
-		preferredIndex = 3,
-	}
-	StaticPopup_Hide(RELOAD_POPUP)
-	StaticPopup_Show(RELOAD_POPUP)
+	local offer = ReloadWindow()
+	-- Filled each time, so it speaks the new language.
+	offer.text:SetText(T("Feels Like: the language changed. The status, the tooltip and the lines in chat have changed already. The settings page changes after a reload of the interface. Reload now?"))
+	-- A button grows to fit its word, and the window grows with the buttons.
+	offer.reload:SetWidth(BUTTON_WIDTH)
+	offer.reload:SetTextToFit(T("Reload"))
+	offer.later:SetWidth(BUTTON_WIDTH)
+	offer.later:SetTextToFit(T("Later"))
+	offer:SetWidth(math.max(WINDOW_WIDTH, offer.reload:GetWidth() + offer.later:GetWidth() + BUTTON_GAP
+		+ 2 * WINDOW_PADDING))
+	offer:SetHeight(offer.text:GetStringHeight() + 3 * WINDOW_PADDING + BUTTON_HEIGHT)
+	offer:Show()
+	offer:Raise() -- over the settings page, which has the same strata
 end
 
 function Options:Open()

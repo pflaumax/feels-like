@@ -194,6 +194,11 @@ local function IsSecret(value)
 end
 Sensors.IsSecret = IsSecret
 
+-- True for a frame of the game that is closed to addons: addon code that reads it gets an error.
+function Sensors.IsForbidden(object)
+	return type(object) == "table" and type(object.IsForbidden) == "function" and object:IsForbidden()
+end
+
 -- The month and the day of the server's calendar, or the computer's when the game has none. Nil without both.
 local function ReadDate()
 	local calendar = C_DateAndTime and C_DateAndTime.GetCurrentCalendarTime and C_DateAndTime.GetCurrentCalendarTime()

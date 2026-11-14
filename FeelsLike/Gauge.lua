@@ -28,6 +28,9 @@ local NEEDLE_REST = 0.05
 local NEEDLE_REST_SPEED = 0.5
 
 local frame, dial, label
+-- The gauge has its own tooltip. Addon code that shows or hides the game's GameTooltip runs the game's tooltip
+-- code tainted, breaks the tooltips of the world and of other addons and gets the blame for their errors.
+local tooltip
 local velocity = 0 -- of the needle
 -- The ring and the face show this reading. It never swings past the real one like the needle does.
 local glow, glowFrom = 0, 0
@@ -172,20 +175,20 @@ local function UpdateTooltip(fresh)
 		return
 	end
 	tooltipShown = shown
-	GameTooltip:SetOwner(frame, anchor)
-	GameTooltip:SetText(T(band.word), band.color[1], band.color[2], band.color[3])
+	tooltip:SetOwner(frame, anchor)
+	tooltip:SetText(T(band.word), band.color[1], band.color[2], band.color[3])
 	if reasons.test then
-		GameTooltip:AddLine(T("A test value. /feels test off ends it."), HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3], true)
+		tooltip:AddLine(T("A test value. /feels test off ends it."), HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3], true)
 	else
 		local line = Gauge.ReasonLine(colder, warmer, Gauge.target >= 0)
 		if line then
-			GameTooltip:AddLine(line, TITLE_COLOR[1], TITLE_COLOR[2], TITLE_COLOR[3], true)
+			tooltip:AddLine(line, TITLE_COLOR[1], TITLE_COLOR[2], TITLE_COLOR[3], true)
 		end
 	end
 	if not db.locked then
-		GameTooltip:AddLine(T("Shift-drag to move"), HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3])
+		tooltip:AddLine(T("Shift-drag to move"), HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3])
 	end
-	GameTooltip:Show()
+	tooltip:Show()
 end
 
 -- A locked gauge only needs the mouse for the hover label and the tooltip. With neither it lets clicks through.
@@ -194,7 +197,7 @@ local function UpdateMouse()
 	frame:EnableMouse(enabled)
 	if not enabled and hovered then
 		hovered = false
-		GameTooltip:Hide()
+		tooltip:Hide()
 	end
 end
 
@@ -235,6 +238,10 @@ function Gauge:Create(savedVariables)
 
 	dial = ns.DialVector.Create(frame) or ns.DialLines.Create(frame)
 	Gauge.renderer = dial.name
+
+	-- The plain tooltip template looks like the game's tooltip. GameTooltipTemplate would also hide the game's
+	-- pet tooltip each time ours hides.
+	tooltip = CreateFrame("GameTooltip", "FeelsLikeTooltip", UIParent, "SharedTooltipTemplate")
 
 	-- The label has its own frame so it stays readable at small sizes.
 	local labelFrame = CreateFrame("Frame", nil, UIParent)
@@ -292,7 +299,7 @@ function Gauge:Create(savedVariables)
 	frame:SetScript("OnLeave", function()
 		hovered = false
 		UpdateLabel()
-		GameTooltip:Hide()
+		tooltip:Hide()
 	end)
 
 	-- The minimap can change size or place after login.
@@ -361,7 +368,7 @@ function Gauge:SetTooltip(on)
 	elseif on then
 		UpdateTooltip(true)
 	else
-		GameTooltip:Hide()
+		tooltip:Hide()
 	end
 end
 
@@ -403,6 +410,12 @@ end
 
 -- Where a frame sits by the minimap, for /feels measure.
 function Gauge:Describe(target)
+	-- The game can hide where a frame is. A hidden value is an error in a sum.
+	local IsSecret = ns.Sensors.IsSecret
+	local x, y = target:GetCenter()
+	if IsSecret(x) or IsSecret(y) or IsSecret(target:GetWidth()) or IsSecret(target:GetEffectiveScale()) then
+		return "place hidden by the game"
+	end
 	local dx, dy, radius = OffsetFromMinimap(target)
 	if not dx then
 		return "not placed by a minimap"
@@ -421,6 +434,9 @@ function Gauge:DescribePosition()
 end
 
 local function FrameName(target)
+	if ns.Sensors.IsForbidden(target) then
+		return "a frame closed to addons"
+	end
 	return target and (target:GetName() or "a frame with no name") or "the screen"
 end
 

@@ -64,10 +64,24 @@ local function Widget()
 		return layer
 	end or false
 	widget.SetText = function(self, text) self.text = text end
+	widget.GetStringHeight = function() return 48 end
+	widget.SetTextToFit = function(self, text) self.text = text end
+	widget.SetHeight = function(self, height) self.height = height end
 	widget.events = {}
 	widget.RegisterEvent = function(self, event) self.events[event] = true end
 	widget.RegisterUnitEvent = function(self, event) self.events[event] = true end
 	return setmetatable(widget, { __index = function() return function() end end })
+end
+
+-- A tooltip that keeps its lines, the title first. Like the game, a hidden tooltip has no owner.
+local function Tooltip(widget)
+	widget.shown = false
+	widget.lines = {}
+	widget.SetOwner = function(self, owner, anchor) self.owner, self.anchor, self.lines = owner, anchor, {} end
+	widget.SetText = function(self, text) self.lines[1] = text end
+	widget.AddLine = function(self, text) self.lines[#self.lines + 1] = text end
+	widget.Hide = function(self) self.shown, self.owner = false, nil end
+	return widget
 end
 
 -- Fake world state.
@@ -76,6 +90,8 @@ local world
 local function ResetWorld()
 	world = {
 		mapID = 1426, zoneText = "Dun Morogh", subzoneText = "",
+		-- Active addon restrictions, by Enum.AddOnRestrictionType value.
+		restrictions = {},
 		instance = { "Dun Morogh", "none", 0, "", 0, 0, false, 0 },
 		hour = 5, minute = 0, -- coldest hour
 		weather = { type = 2, intensity = 1 },
@@ -127,25 +143,26 @@ local function InstallGlobals(forever)
 	_G.DRUNK_MESSAGE_ITEM_SELF4 = "You feel completely smashed after that %s."
 	_G.UIParent = Widget()
 	_G.UIParent.name = "UIParent"
-	_G.GameTooltip = Widget()
-	_G.GameTooltip.IsOwned = function() return false end
-	-- The tooltip keeps its lines, the title first.
-	_G.GameTooltip.lines = {}
-	_G.GameTooltip.SetOwner = function(self, owner, anchor) self.owner, self.anchor, self.lines = owner, anchor, {} end
-	_G.GameTooltip.SetText = function(self, text) self.lines[1] = text end
-	_G.GameTooltip.AddLine = function(self, text) self.lines[#self.lines + 1] = text end
-	-- The window that offers a reload.
+	-- The game's tooltip. The gauge has its own and must never touch this one.
+	_G.GameTooltip = Tooltip(Widget())
+	-- The game's shared windows must not be used either.
 	_G.StaticPopupDialogs = {}
-	_G.StaticPopup_Show = function(name) world.popup = name end
-	_G.StaticPopup_Hide = function(name) if world.popup == name then world.popup = nil end end
+	_G.StaticPopup_Show = function(name) world.staticPopup = name end
 	_G.ReloadUI = function() world.reloaded = true end
-	_G.CreateFrame = function(_, name, parent)
+	_G.CreateFrame = function(frameType, name, parent, template)
 		local frame = Widget()
-		frame.name, frame.parent = name, parent
+		frame.name, frame.parent, frame.template = name, parent, template
+		if frameType == "GameTooltip" then
+			Tooltip(frame)
+		end
 		createdFrames[#createdFrames + 1] = frame
 		if name then _G[name] = frame end
 		return frame
 	end
+	-- Addon restrictions of the game, by name of Enum.AddOnRestrictionType.
+	_G.C_RestrictedActions = {
+		IsAddOnRestrictionActive = function(restriction) return world.restrictions[restriction] == true end,
+	}
 	_G.Minimap = Widget()
 	_G.Minimap.name = "Minimap"
 	_G.InCombatLockdown = function() return world.combat end
@@ -202,7 +219,10 @@ local function InstallGlobals(forever)
 	if forever then
 		_G.WOW_PROJECT_CAMELOT = 18
 		_G.WOW_PROJECT_ID = 18
-		_G.Enum = { WeatherType = { Clear = 0, Rain = 1, Snow = 2, Sandstorm = 3, Miscellaneous = 4 } }
+		_G.Enum = {
+			WeatherType = { Clear = 0, Rain = 1, Snow = 2, Sandstorm = 3, Miscellaneous = 4 },
+			AddOnRestrictionType = { Combat = 0, Encounter = 1, ChallengeMode = 2, PvPMatch = 3, Map = 4, Chat = 5 },
+		}
 		_G.C_Weather = { GetCurrentWeather = function() return world.weather end }
 		_G.C_DateAndTime = {
 			IsDayTime = function() return world.hour >= 6 and world.hour < 18 end,
@@ -572,6 +592,32 @@ measured = Slash("measure MoonCluster.Moon")
 check("measure a frame by path", measured:find("MoonCluster.Moon: 33 degrees from 12 o'clock", 1, true), measured)
 check("measure an unknown path", Slash("measure MoonCluster.Sun"):find("no frame named MoonCluster.Sun", 1, true))
 check("measure a path through a value", Slash("measure MoonCluster.Moon.GetWidth.x"):find("no frame named", 1, true))
+-- A frame closed to addons is an error to read, so it is only named.
+local closed = Widget()
+closed.IsForbidden = function() return true end
+closed.GetName = function() error("read a frame closed to addons") end
+closed.GetCenter = function() error("read a frame closed to addons") end
+_G.ClosedFrame = closed
+check("measure a frame closed to addons", Slash("measure ClosedFrame"):find("ClosedFrame is closed to addons", 1, true))
+local throughClosed = Slash("measure ClosedFrame.Child")
+check("measure a path through a frame closed to addons names that frame",
+	throughClosed:find("ClosedFrame is closed to addons", 1, true) ~= nil, throughClosed)
+_G.ClosedFrame = nil
+local secret = {}
+local hiddenPlace = Widget()
+hiddenPlace.GetCenter = function() return secret, secret end
+_G.HiddenPlace = hiddenPlace
+local isSecret = issecretvalue
+_G.issecretvalue = function(value) return value == secret end
+local hiddenSaid = Slash("measure HiddenPlace")
+check("measure a frame whose place the game hides", hiddenSaid:find("HiddenPlace: place hidden by the game", 1, true) ~= nil,
+	hiddenSaid)
+_G.issecretvalue = isSecret
+_G.HiddenPlace = nil
+local minimapPoint = rawget(Minimap, "point")
+Minimap.point = { "CENTER", closed, "CENTER", 0, 0 }
+check("debug names an anchor closed to addons", Slash("debug"):find("CENTER on CENTER of a frame closed to addons", 1, true))
+Minimap.point = minimapPoint
 _G.MoonButton, _G.MoonCluster = nil, nil
 
 -- The label shows on hover.
@@ -652,21 +698,26 @@ Press()
 Release(40)
 check("plain drag saves nothing", FeelsLikeDB.x == nil and gauge.point[2] == _G.Minimap)
 
+-- The gauge's own tooltip, from the last load of the addon.
+local function Tip()
+	return _G.FeelsLikeTooltip
+end
+
 -- The tooltip says the word, the reasons and how to move the gauge.
 local function TooltipText()
-	return table.concat(GameTooltip.lines, " | ")
+	return table.concat(Tip().lines, " | ")
 end
 local before = { world.mapID, world.zoneText, world.hour, world.weather }
 world.mapID, world.zoneText, world.hour = 1426, "Dun Morogh", 5
 world.weather = { type = 2, intensity = 1 }
 Tick(2)
 gauge.scripts.OnEnter()
-check("tooltip shown on hover", GameTooltip.shown == true and GameTooltip.owner == gauge)
+check("tooltip shown on hover", Tip().shown == true and Tip().owner == gauge)
 check("tooltip names the word and the reasons",
 	TooltipText() == "Freezing | Why: |cff8fd9f0a cold place, snow, the night|r | Shift-drag to move", TooltipText())
-GameTooltip.lines = {}
+Tip().lines = {}
 Tick(1)
-check("an open tooltip with nothing new is left alone", #GameTooltip.lines == 0, #GameTooltip.lines)
+check("an open tooltip with nothing new is left alone", #Tip().lines == 0, #Tip().lines)
 world.weather = { type = 0, intensity = 0 }
 Tick(1)
 check("tooltip follows the reading while it is open",
@@ -678,20 +729,38 @@ check("tooltip says a test runs", TooltipText():find("Hot | A test value", 1, tr
 Slash("test off")
 -- The tooltip can be turned off in the settings. The word next to the gauge stays.
 settings.FEELSLIKE_TOOLTIP.callback(nil, false)
-check("tooltip off hides an open tooltip", GameTooltip.shown == false and FeelsLikeDB.tooltip == false)
+check("tooltip off hides an open tooltip", Tip().shown == false and FeelsLikeDB.tooltip == false)
 gauge.scripts.OnLeave()
-GameTooltip.lines = {}
+Tip().lines = {}
 gauge.scripts.OnEnter()
 Tick(1)
-check("no tooltip on hover while it is off", #GameTooltip.lines == 0 and GameTooltip.shown == false, #GameTooltip.lines)
+check("no tooltip on hover while it is off", #Tip().lines == 0 and Tip().shown == false, #Tip().lines)
 check("the word still shows on hover", fontStrings.GameFontHighlightSmall.shown == true)
 settings.FEELSLIKE_TOOLTIP.callback(nil, true)
-check("tooltip on shows it again at once", GameTooltip.shown == true and #GameTooltip.lines > 1, #GameTooltip.lines)
+check("tooltip on shows it again at once", Tip().shown == true and #Tip().lines > 1, #Tip().lines)
 gauge.scripts.OnLeave()
-check("tooltip hidden off the gauge", GameTooltip.shown == false)
-GameTooltip.lines = {}
+check("tooltip hidden off the gauge", Tip().shown == false)
+Tip().lines = {}
 Tick(1)
-check("no tooltip work while the mouse is away", #GameTooltip.lines == 0)
+check("no tooltip work while the mouse is away", #Tip().lines == 0)
+-- The game's own tooltip is never touched: the gauge has its own.
+local otherOwner = {}
+GameTooltip:SetOwner(otherOwner, "ANCHOR_CURSOR")
+GameTooltip:SetText("Kobold Vermin")
+GameTooltip:Show()
+gauge.scripts.OnEnter()
+check("the gauge shows its own tooltip", Tip().shown == true and Tip().owner == gauge, Tip().owner)
+world.weather = { type = 2, intensity = 1 }
+Tick(1)
+ns.Gauge:Refresh()
+gauge.scripts.OnLeave()
+check("its own tooltip goes with the mouse", Tip().shown == false)
+settings.FEELSLIKE_TOOLTIP.callback(nil, false)
+settings.FEELSLIKE_TOOLTIP.callback(nil, true)
+check("the game's tooltip is never touched", GameTooltip.shown == true and GameTooltip.owner == otherOwner
+	and table.concat(GameTooltip.lines, " | ") == "Kobold Vermin", table.concat(GameTooltip.lines, " | "))
+check("the gauge tooltip is a plain one", Tip() ~= GameTooltip and Tip().template == "SharedTooltipTemplate", Tip().template)
+GameTooltip:Hide()
 world.mapID, world.zoneText, world.hour, world.weather = before[1], before[2], before[3], before[4]
 
 -- Hover state does not stick when the mouse is off.
@@ -1572,6 +1641,25 @@ check("sweep ends on real reading", Gauge.target ~= 100, Gauge.target)
 -- Settings and slash.
 Slash("")
 check("slash opens settings", settings.opened == 7)
+-- In a boss encounter, a keystone dungeon or a PvP match the game restricts the settings out of combat too.
+local closedLines = {
+	Combat = "settings open after combat.",
+	Encounter = "settings open after the boss fight, the Challenge Mode run or the PvP match.",
+	ChallengeMode = "settings open after the boss fight, the Challenge Mode run or the PvP match.",
+	PvPMatch = "settings open after the boss fight, the Challenge Mode run or the PvP match.",
+}
+for restriction, line in pairs(closedLines) do
+	settings.opened = nil
+	world.restrictions = { [Enum.AddOnRestrictionType[restriction]] = true }
+	local said = Slash("")
+	check(restriction .. " keeps the settings closed and says why", settings.opened == nil
+		and said:find(line, 1, true) ~= nil, said)
+end
+settings.opened = nil
+world.restrictions = { [Enum.AddOnRestrictionType.Chat] = true }
+Slash("")
+check("a chat restriction does not keep the settings closed", settings.opened == 7)
+world.restrictions = {}
 settings.FEELSLIKE_UNIT.callback(nil, "F")
 check("unit setting switches the glyph", unitLayer.svg:find("unit_f.svg", 1, true), unitLayer.svg)
 check("usage on unknown", Slash("nope"):find("/feels debug", 1, true))
@@ -1883,8 +1971,8 @@ Tick(10)
 check("ukrainian word next to the gauge", fontStrings.GameFontHighlightSmall.text == "Морозно", fontStrings.GameFontHighlightSmall.text)
 local ukGauge = _G.FeelsLikeGauge
 ukGauge.scripts.OnEnter()
-check("ukrainian tooltip", table.concat(GameTooltip.lines, " | ")
-	== "Морозно | Чому: |cff8fd9f0холодне місце, сніг, ніч|r | Shift + тягни, щоб пересунути", table.concat(GameTooltip.lines, " | "))
+check("ukrainian tooltip", table.concat(Tip().lines, " | ")
+	== "Морозно | Чому: |cff8fd9f0холодне місце, сніг, ніч|r | Shift + тягни, щоб пересунути", table.concat(Tip().lines, " | "))
 ukGauge.scripts.OnLeave()
 GoMild()
 Tick(2)
@@ -1905,30 +1993,33 @@ printed = {}
 settings.FEELSLIKE_LANGUAGE.callback(nil, "en")
 check("english word at once", fontStrings.GameFontHighlightSmall.text == "Freezing", fontStrings.GameFontHighlightSmall.text)
 -- The settings page was built in Ukrainian, so a window offers a reload, in the new language.
-local popup = StaticPopupDialogs.FEELSLIKE_RELOAD
-check("a window offers a reload", world.popup == "FEELSLIKE_RELOAD" and popup ~= nil and popup.button1 == "Reload"
-	and popup.text:find("Reload now?", 1, true) ~= nil, world.popup)
+local reloadWindow = _G.FeelsLikeReloadWindow
+check("a window offers a reload", reloadWindow ~= nil and reloadWindow.shown == true and reloadWindow.reload.text == "Reload"
+	and reloadWindow.later.text == "Later" and reloadWindow.text.text:find("Reload now?", 1, true) ~= nil,
+	reloadWindow and reloadWindow.text.text)
+check("the window is the addon's own, not the game's shared one", world.staticPopup == nil and next(StaticPopupDialogs) == nil,
+	world.staticPopup)
+check("clicks on the window do not go through", reloadWindow.mouse == true)
+check("the window is not where the game shows its own", reloadWindow.point[1] == "CENTER", reloadWindow.point[1])
+check("the window fits its text and buttons", reloadWindow.height == 48 + 3 * 16 + 21, reloadWindow.height)
 check("nothing in chat about it", printed[1] == nil, printed[1])
 world.reloaded = nil
-popup.OnAccept()
+reloadWindow.reload.scripts.OnClick()
 check("its button reloads the interface", world.reloaded == true)
+reloadWindow.later.scripts.OnClick()
+check("later closes it", reloadWindow.shown == false)
+settings.FEELSLIKE_LANGUAGE.callback(nil, "de")
+check("another new language offers it again", reloadWindow.shown == true and _G.FeelsLikeReloadWindow == reloadWindow)
 settings.FEELSLIKE_LANGUAGE.callback(nil, "uk")
 check("ukrainian word at once", fontStrings.GameFontHighlightSmall.text == "Морозно", fontStrings.GameFontHighlightSmall.text)
-check("back to the language of the page: no window", world.popup == nil, world.popup)
+check("back to the language of the page: no window", reloadWindow.shown == false)
 -- From an English page to Ukrainian the window speaks Ukrainian.
 ns, settings = LoadAddon(true, { label = "always" })
 settings.FEELSLIKE_LANGUAGE.callback(nil, "uk")
-popup = StaticPopupDialogs.FEELSLIKE_RELOAD
-check("the window speaks the new language", world.popup == "FEELSLIKE_RELOAD" and popup.button1 == "Перезавантажити"
-	and popup.button2 == "Пізніше" and popup.text:find("мову змінено", 1, true) ~= nil, popup and popup.text)
-world.popup = nil
--- Without the game's windows the hint goes to chat.
-local showPopup = StaticPopup_Show
-_G.StaticPopup_Show = nil
-printed = {}
-settings.FEELSLIKE_LANGUAGE.callback(nil, "en")
-check("no window: the hint goes to chat", printed[1] and printed[1]:find("type /reload to change the settings page too", 1, true), printed[1])
-_G.StaticPopup_Show = showPopup
+reloadWindow = _G.FeelsLikeReloadWindow
+check("the window speaks the new language", reloadWindow.shown == true and reloadWindow.reload.text == "Перезавантажити"
+	and reloadWindow.later.text == "Пізніше" and reloadWindow.text.text:find("мову змінено", 1, true) ~= nil,
+	reloadWindow.text.text)
 ns, settings = LoadAddon(true, { language = "uk", label = "always" })
 Tick(10)
 -- The panel feed speaks Ukrainian too.
@@ -1956,8 +2047,8 @@ check("a german game starts in german", FeelsLikeDB.language == "de", FeelsLikeD
 Tick(10)
 check("german word next to the gauge", fontStrings.GameFontHighlightSmall.text == "Eisig", fontStrings.GameFontHighlightSmall.text)
 _G.FeelsLikeGauge.scripts.OnEnter()
-check("german tooltip", table.concat(GameTooltip.lines, " | ")
-	== "Eisig | Warum: |cff8fd9f0ein kalter Ort, Schnee, die Nacht|r | Umschalt + Ziehen zum Verschieben", table.concat(GameTooltip.lines, " | "))
+check("german tooltip", table.concat(Tip().lines, " | ")
+	== "Eisig | Warum: |cff8fd9f0ein kalter Ort, Schnee, die Nacht|r | Umschalt + Ziehen zum Verschieben", table.concat(Tip().lines, " | "))
 _G.FeelsLikeGauge.scripts.OnLeave()
 ns = LoadAddon(true, { language = "en", version = 2 })
 check("english saved before there was a choice of german follows the game", FeelsLikeDB.language == "de", FeelsLikeDB.language)
@@ -1973,8 +2064,8 @@ ns = LoadAddon(true, { label = "always" })
 check("a french game starts in french", FeelsLikeDB.language == "fr", FeelsLikeDB.language)
 Tick(10)
 _G.FeelsLikeGauge.scripts.OnEnter()
-check("french tooltip", table.concat(GameTooltip.lines, " | ")
-	== "Glacial | Pourquoi : |cff8fd9f0un lieu froid, la neige, la nuit|r | Maj + glisser pour déplacer", table.concat(GameTooltip.lines, " | "))
+check("french tooltip", table.concat(Tip().lines, " | ")
+	== "Glacial | Pourquoi : |cff8fd9f0un lieu froid, la neige, la nuit|r | Maj + glisser pour déplacer", table.concat(Tip().lines, " | "))
 _G.FeelsLikeGauge.scripts.OnLeave()
 -- Spain and Latin America share the Spanish text.
 clientLocale = "esMX"
@@ -1982,16 +2073,16 @@ ns = LoadAddon(true, { label = "always" })
 check("a latin american game starts in spanish", FeelsLikeDB.language == "es", FeelsLikeDB.language)
 Tick(10)
 _G.FeelsLikeGauge.scripts.OnEnter()
-check("spanish tooltip", table.concat(GameTooltip.lines, " | ")
-	== "Gélido | Motivo: |cff8fd9f0un lugar frío, la nieve, la noche|r | Mayús + arrastrar para mover", table.concat(GameTooltip.lines, " | "))
+check("spanish tooltip", table.concat(Tip().lines, " | ")
+	== "Gélido | Motivo: |cff8fd9f0un lugar frío, la nieve, la noche|r | Mayús + arrastrar para mover", table.concat(Tip().lines, " | "))
 _G.FeelsLikeGauge.scripts.OnLeave()
 clientLocale = "ptBR"
 ns = LoadAddon(true, { label = "always" })
 check("a brazilian game starts in portuguese", FeelsLikeDB.language == "pt", FeelsLikeDB.language)
 Tick(10)
 _G.FeelsLikeGauge.scripts.OnEnter()
-check("portuguese tooltip", table.concat(GameTooltip.lines, " | ")
-	== "Congelante | Motivo: |cff8fd9f0um lugar frio, a neve, a noite|r | Shift + arrastar para mover", table.concat(GameTooltip.lines, " | "))
+check("portuguese tooltip", table.concat(Tip().lines, " | ")
+	== "Congelante | Motivo: |cff8fd9f0um lugar frio, a neve, a noite|r | Shift + arrastar para mover", table.concat(Tip().lines, " | "))
 _G.FeelsLikeGauge.scripts.OnLeave()
 clientLocale = "enUS"
 ns = LoadAddon(true, { language = "en", version = 2 })
@@ -2016,13 +2107,13 @@ check("tirisfal by day is mild for every undead setting", numbDayWord == "Mild" 
 	and livingDay == plainDay and math.abs(numbDay - livingDay) < 5, numbDay .. " " .. livingDay .. " " .. plainDay)
 local tirisfalGauge = _G.FeelsLikeGauge
 tirisfalGauge.scripts.OnEnter()
-check("a mild reading on the cold half names the cold first", table.concat(GameTooltip.lines, " | ")
-	== "Mild | Why: |cff8fd9f0a cool place|r, |cfff5a345the sun|r | Shift-drag to move", table.concat(GameTooltip.lines, " | "))
+check("a mild reading on the cold half names the cold first", table.concat(Tip().lines, " | ")
+	== "Mild | Why: |cff8fd9f0a cool place|r, |cfff5a345the sun|r | Shift-drag to move", table.concat(Tip().lines, " | "))
 world.indoors = true
 Tick(3)
 Tick(1)
-check("under a roof it is on the warm half and names the roof first", ns.Gauge.target > 0 and table.concat(GameTooltip.lines, " | ")
-	== "Mild | Why: |cfff5a345a roof|r, |cff8fd9f0a cool place|r | Shift-drag to move", table.concat(GameTooltip.lines, " | "))
+check("under a roof it is on the warm half and names the roof first", ns.Gauge.target > 0 and table.concat(Tip().lines, " | ")
+	== "Mild | Why: |cfff5a345a roof|r, |cff8fd9f0a cool place|r | Shift-drag to move", table.concat(Tip().lines, " | "))
 tirisfalGauge.scripts.OnLeave()
 world.indoors = false
 -- The settings show at night: Cold like the living, Mild for numb flesh.
@@ -2059,7 +2150,7 @@ check("a fight warms you by 12 at most", math.abs(ns.Gauge.target - (calm + 12))
 check("debug shows the fight", Slash("debug"):find("fight 1.00: +12.0", 1, true))
 local fightGauge = _G.FeelsLikeGauge
 fightGauge.scripts.OnEnter()
-check("the tooltip names the fight", table.concat(GameTooltip.lines, " | "):find("a fight", 1, true), table.concat(GameTooltip.lines, " | "))
+check("the tooltip names the fight", table.concat(Tip().lines, " | "):find("a fight", 1, true), table.concat(Tip().lines, " | "))
 fightGauge.scripts.OnLeave()
 world.combat = false
 Tick(15)
@@ -2091,14 +2182,14 @@ local function AnchorAt(x, y)
 	local scale = fightGauge:GetScale()
 	fightGauge.GetCenter = function() return x / scale, y / scale end
 	fightGauge.scripts.OnEnter()
-	local anchor = GameTooltip.anchor
+	local anchor = Tip().anchor
 	fightGauge.scripts.OnLeave()
 	return anchor
 end
-check("top right: the tooltip opens down and left", AnchorAt(900, 500) == "ANCHOR_BOTTOMLEFT", GameTooltip.anchor)
-check("top left: down and right", AnchorAt(100, 500) == "ANCHOR_BOTTOMRIGHT", GameTooltip.anchor)
-check("bottom right: up and left", AnchorAt(900, 100) == "ANCHOR_LEFT", GameTooltip.anchor)
-check("bottom left: up and right", AnchorAt(100, 100) == "ANCHOR_RIGHT", GameTooltip.anchor)
+check("top right: the tooltip opens down and left", AnchorAt(900, 500) == "ANCHOR_BOTTOMLEFT", Tip().anchor)
+check("top left: down and right", AnchorAt(100, 500) == "ANCHOR_BOTTOMRIGHT", Tip().anchor)
+check("bottom right: up and left", AnchorAt(900, 100) == "ANCHOR_LEFT", Tip().anchor)
+check("bottom left: up and right", AnchorAt(100, 100) == "ANCHOR_RIGHT", Tip().anchor)
 
 -- Seasons and holidays can be turned off.
 ns = LoadAddon(true)

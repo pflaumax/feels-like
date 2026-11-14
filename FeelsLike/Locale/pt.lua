@@ -56,6 +56,8 @@ ns.Locale.Add("pt", "Português", {
 	["the gauge is locked. Unlock it in the settings: /feels"] =
 		"o termômetro está travado. Destrave-o nas configurações: /feels",
 	["settings open after combat."] = "as configurações abrirão depois do combate.",
+	["settings open after the boss fight, the Challenge Mode run or the PvP match."] =
+		"as configurações abrirão depois do combate contra o chefe, do Modo Desafio ou da partida JxJ.",
 	["type /reload to change the settings page too."] = "digite /reload para mudar também a página de configurações.",
 
 	-- Settings.

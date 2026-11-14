@@ -69,10 +69,42 @@ local function Print(message)
 end
 ns.Print = Print
 
+-- The game restricts how addons open the settings (C_SettingsUtil.OpenSettingsPanel) but does not say when, so
+-- every kind of fight counts: combat, a boss encounter, a Challenge Mode dungeon and a PvP match. Out of combat
+-- the last three can last long, so the line in chat says what to wait for.
+local AFTER_COMBAT = "settings open after combat."
+local AFTER_MATCH = "settings open after the boss fight, the Challenge Mode run or the PvP match."
+local SETTINGS_RESTRICTIONS = {
+	{ name = "Combat", line = AFTER_COMBAT },
+	{ name = "Encounter", line = AFTER_MATCH },
+	{ name = "ChallengeMode", line = AFTER_MATCH },
+	{ name = "PvPMatch", line = AFTER_MATCH },
+}
+
+-- The line in chat that says why the settings stay closed, or nil when the game lets them open.
+local function SettingsClosedLine()
+	if InCombatLockdown() then
+		return AFTER_COMBAT
+	end
+	local types = Enum and Enum.AddOnRestrictionType
+	local active = C_RestrictedActions and C_RestrictedActions.IsAddOnRestrictionActive
+	if not (types and active) then
+		return nil
+	end
+	for _, restriction in ipairs(SETTINGS_RESTRICTIONS) do
+		local restrictionType = types[restriction.name]
+		if restrictionType and active(restrictionType) then
+			return restriction.line
+		end
+	end
+	return nil
+end
+
 -- Opens the settings, from the slash command or a click on the panel feed.
 local function OpenSettings()
-	if InCombatLockdown() then
-		Print(ns.T("settings open after combat."))
+	local closed = SettingsClosedLine()
+	if closed then
+		Print(ns.T(closed))
 		return
 	end
 	ns.Options:Open()
@@ -467,22 +499,34 @@ end
 
 SLASH_FEELSLIKE1 = "/feels"
 SLASH_FEELSLIKE2 = "/feelslike"
--- Finds a frame by global name or by a path like MinimapCluster.DielFrame.
+-- Finds a frame by global name or by a path like MinimapCluster.DielFrame. The search stops at a frame that is
+-- closed to addons, because reading it is an error, and returns it with the part of the path that led to it.
 local function FindFrame(path)
 	local target = _G
+	local walked = {}
 	for key in path:gmatch("[^.]+") do
 		if type(target) ~= "table" then
 			return nil
 		end
 		target = target[key]
+		walked[#walked + 1] = key
+		if ns.Sensors.IsForbidden(target) then
+			return target, table.concat(walked, ".")
+		end
 	end
-	return target
+	return target, path
 end
 
 -- Prints where a frame sits next to the minimap.
 local function Measure(name)
-	local target = name and FindFrame(name)
-	if type(target) ~= "table" or type(target.GetCenter) ~= "function" then
+	local target, found
+	if name then
+		target, found = FindFrame(name)
+	end
+	if ns.Sensors.IsForbidden(target) then
+		Print(found .. " is closed to addons, so it cannot be measured.")
+		return
+	elseif type(target) ~= "table" or type(target.GetCenter) ~= "function" then
 		Print("no frame named " .. tostring(name) .. ". Hover it with /fstack to see its name.")
 		return
 	end
