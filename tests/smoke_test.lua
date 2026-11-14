@@ -1972,7 +1972,7 @@ check("ukrainian word next to the gauge", fontStrings.GameFontHighlightSmall.tex
 local ukGauge = _G.FeelsLikeGauge
 ukGauge.scripts.OnEnter()
 check("ukrainian tooltip", table.concat(Tip().lines, " | ")
-	== "Морозно | Чому: |cff8fd9f0холодне місце, сніг, ніч|r | Shift + тягни, щоб пересунути", table.concat(Tip().lines, " | "))
+	== "Морозно | Чому: |cff8fd9f0холодне місце, сніг, ніч|r | Затисни Shift і тягни, щоб пересунути", table.concat(Tip().lines, " | "))
 ukGauge.scripts.OnLeave()
 GoMild()
 Tick(2)

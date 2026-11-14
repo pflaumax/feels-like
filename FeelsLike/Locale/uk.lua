@@ -14,7 +14,7 @@ ns.Locale.Add("uk", "Українська", {
 
 	-- Tooltip.
 	["Why:"] = "Чому:",
-	["Shift-drag to move"] = "Shift + тягни, щоб пересунути",
+	["Shift-drag to move"] = "Затисни Shift і тягни, щоб пересунути",
 	["A test value. /feels test off ends it."] = "Тестове значення. /feels test off вимикає його.",
 	["Click to open the settings"] = "Клацни, щоб відкрити налаштування",
 
@@ -57,7 +57,7 @@ ns.Locale.Add("uk", "Українська", {
 	["settings open after combat."] = "налаштування відкриються після бою.",
 	["settings open after the boss fight, the Challenge Mode run or the PvP match."] =
 		"налаштування відкриються після бою з босом, режиму випробування або PvP-матчу.",
-	["type /reload to change the settings page too."] = "введи /reload, щоб змінити й сторінку налаштувань.",
+	["type /reload to change the settings page too."] = "введи /reload, щоб також змінити сторінку налаштувань.",
 
 	-- Settings.
 	["Units"] = "Одиниці",
@@ -69,29 +69,29 @@ ns.Locale.Add("uk", "Українська", {
 	["Always"] = "Завжди",
 	["Never"] = "Ніколи",
 	["The status is one word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."] =
-		"Статус — це одне слово біля датчика: Морозно, Холодно, Помірно, Тепло, Спекотно, Пекельно або Затишно.",
+		"Статус — це слово біля датчика: Морозно, Холодно, Помірно, Тепло, Спекотно, Пекельно або Затишно.",
 	["Tooltip on hover"] = "Підказка при наведенні",
 	["On: hover the gauge for a tooltip with the status and why it is so. Off: no tooltip, only the status word as set above."] =
-		"Увімкнено: наведи курсор на датчик, і підказка покаже статус та чому він такий. Вимкнено: підказки немає, лише слово статусу, як задано вище.",
-	["Feel by race"] = "Відчуття за расою",
+		"Увімкнено: наведи курсор на датчик, і підказка покаже статус та його опис. Вимкнено: підказки немає, лише статус, вказаний вище.",
+	["Feel by race"] = "Відчуття залежно від раси",
 	["Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren. It shows in cold and hot places: a mild place feels almost the same to everyone."] =
-		"Раса змінює те, наскільки сильно ти відчуваєш холод і спеку. Дворфи краще переносять холод. Таурени теж, але гірше переносять спеку, а тролі навпаки. Нежить майже не відчуває ні того, ні іншого. Друїди у формі кота, ведмедя, у подорожній, водній формі чи формі совуха мають хутро, як таурени. Різницю видно в холодних і спекотних місцях: у помірному місці всі почуваються майже однаково.",
+		"Інтенсивність відчуття холоду та спеки змінюється залежно від раси. Дворфи краще переносять холод. Таурени витримують холод, але гірше переносять спеку, а тролі навпаки. Нежить майже не відчуває ні того, ні іншого. Друїди у формі кота, ведмедя, у подорожній, водній формі чи формі совуха мають хутро, як таурени. Різницю видно в холодних і спекотних місцях: у помірному місці всі почуваються майже однаково.",
 	["Undead feel"] = "Відчуття нежиті",
 	["Numb"] = "Нечутлива",
-	["Like the living"] = "Як живі",
+	["Like the living"] = "Нарівні з живими",
 	["Only for undead characters, while Feel by race is on. Numb: dead flesh hardly feels the weather, but it fears fire: a fire spell in a fight scorches it for a moment. Like the living: they feel the weather like a human."] =
-		"Лише для нежиті, коли ввімкнено «Відчуття за расою». Нечутлива: мертва плоть майже не відчуває погоди, але боїться вогню: вогняне закляття в бою на мить обпікає її. Як живі: відчуває погоду як людина.",
-	["Seasons and holidays"] = "Пори року і свята",
+		"Лише для нежиті, коли ввімкнено «Відчуття залежно від раси». Нечутлива: мертва плоть майже не відчуває впливу погоди, але боїться вогню: вогняне закляття в бою на мить обпікає її. Нарівні з живими: відчуває погоду, як людина.",
+	["Seasons and holidays"] = "Пори року та свята",
 	["On: winter (December to February) feels a little colder and summer (June to August) a little warmer, most of all during Winter Veil and Midsummer. It follows the server's calendar. Off: the date changes nothing, and every day feels like spring or autumn."] =
-		"Увімкнено: взимку (грудень–лютий) трохи холодніше, влітку (червень–серпень) трохи тепліше, найбільше під час Зимового Покрову та Літнього сонцестояння. За календарем сервера. Вимкнено: дата нічого не змінює, кожен день як навесні чи восени.",
+		"Увімкнено: взимку (грудень–лютий) трохи холодніше, влітку (червень–серпень) трохи тепліше, найбільше під час Зимового Покрову та Літнього сонцестояння. Залежить від календаря сервера. Вимкнено: дата нічого не змінює, кожен день як навесні чи восени.",
 	["Flavor lines in chat"] = "Репліки в чаті",
 	["Now and then a short line in chat, only for you, when your character starts to feel the cold, the heat or Cozy."] =
-		"Час від часу короткий рядок у чаті, лише для тебе, коли персонаж починає відчувати холод, спеку чи затишок.",
+		"Час від часу в чаті з'являється коротка репліка, видима тільки тобі, коли персонаж починає відчувати холод, спеку чи затишок.",
 	["Language"] = "Мова",
 	["The language of the status, the tooltip and the lines in chat. They change at once. This page changes after a reload of the interface, and the addon offers one."] =
-		"Мова статусу, підказки й рядків у чаті. Вони змінюються одразу. Ця сторінка змінюється після перезавантаження інтерфейсу, і аддон одразу його пропонує.",
+		"Мова статусу, підказок і реплік у чаті (змінюється одразу). Ця сторінка оновиться після перезавантаження інтерфейсу, і аддон пропонує таку можливість.",
 	["Feels Like: the language changed. The status, the tooltip and the lines in chat have changed already. The settings page changes after a reload of the interface. Reload now?"] =
-		"Feels Like: мову змінено. Статус, підказка й репліки в чаті вже змінилися. Сторінка налаштувань зміниться після перезавантаження інтерфейсу. Перезавантажити зараз?",
+		"Feels Like: мову змінено. Статус, підказка й репліки в чаті вже змінилися. Сторінка налаштувань оновиться після перезавантаження інтерфейсу. Перезавантажити зараз?",
 	["Reload"] = "Перезавантажити",
 	["Later"] = "Пізніше",
 	["Lock position"] = "Закріпити позицію",
@@ -104,37 +104,37 @@ ns.Locale.Add("uk", "Українська", {
 	-- Lines in chat: the cold and the heat.
 	["You shiver from the cold. (/shiver)"] = "Ти тремтиш від холоду. (/shiver)",
 	["Your teeth chatter. You need a fire."] = "У тебе цокотять зуби. Потрібен вогонь.",
-	["The cold bites through your clothes."] = "Мороз пробирає крізь одяг.",
+	["The cold bites through your clothes."] = "Мороз пробирає до кісток.",
 	["A chill runs down your back."] = "Холодок пробігає по спині.",
-	["Your breath steams in the cold air."] = "Твій подих парує на холодному повітрі.",
+	["Your breath steams in the cold air."] = "У тебе йде пара з рота.",
 	["You rub your hands to keep them warm."] = "Ти розтираєш руки, щоб зігрітися.",
 	["Sweat runs down your face."] = "Піт стікає по обличчю.",
-	["The heat makes you sluggish."] = "Спека забирає в тебе сили.",
-	["You look for a bit of shade."] = "Ти шукаєш хоч трохи тіні.",
-	["The heat is unbearable."] = "Спека нестерпна.",
+	["The heat makes you sluggish."] = "Спека знесилює тебе.",
+	["You look for a bit of shade."] = "Ти шукаєш хоч клаптик тіні.",
+	["The heat is unbearable."] = "Нестерпна спека.",
 	["The air burns in your lungs."] = "Повітря обпікає легені.",
-	["You feel like you are in an oven."] = "Ти наче в печі.",
+	["You feel like you are in an oven."] = "Пече як у пеклі.",
 
 	-- Fire and Cozy.
-	["Ouch! That burns!"] = "Ой! Пече!",
+	["Ouch! That burns!"] = "Ох, як пече!",
 	["You jump out of the flames."] = "Ти вистрибуєш із полум'я.",
 	["Hot, hot, hot!"] = "Гаряче, гаряче, гаряче!",
 	["You warm your hands by the fire."] = "Ти грієш руки біля вогню.",
-	["The fire's warmth seeps into your bones."] = "Тепло вогню проймає до кісток.",
+	["The fire's warmth seeps into your bones."] = "Тепло розливається по всьому тілу.",
 	["You relax by the crackling fire."] = "Ти відпочиваєш під тріск вогнища.",
 	["The warmth of the inn wraps around you."] = "Тепло таверни огортає тебе.",
 	["You feel warm and cozy."] = "Тобі тепло й затишно.",
-	["It is good to be inside."] = "Добре бути під дахом.",
+	["It is good to be inside."] = "Добре мати дах над головою.",
 
 	-- Wet clothes, weather, a drink and a torch.
 	["Your wet clothes cling to you."] = "Мокрий одяг липне до тіла.",
-	["Water drips from your clothes."] = "З одягу крапає вода.",
-	["You are soaked to the skin."] = "На тобі немає сухої нитки.",
+	["Water drips from your clothes."] = "З одягу стікає вода.",
+	["You are soaked to the skin."] = "Одяг промок до нитки.",
 	["Rain runs down your neck."] = "Дощ стікає за комір.",
 	["The rain drums on your shoulders."] = "Дощ барабанить по плечах.",
 	["You pull your collar up against the rain."] = "Ти піднімаєш комір від дощу.",
 	["Snowflakes melt on your face."] = "Сніжинки тануть на обличчі.",
-	["Snow settles on your shoulders."] = "Сніг лягає на плечі.",
+	["Snow settles on your shoulders."] = "Сніг падає на плечі.",
 	["The snow crunches under your feet."] = "Сніг рипить під ногами.",
 	["The drink warms you from the inside."] = "Випивка гріє зсередини.",
 	["A pleasant warmth spreads through you."] = "Приємне тепло розливається тілом.",
