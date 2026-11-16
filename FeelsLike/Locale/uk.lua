@@ -60,22 +60,21 @@ ns.Locale.Add("uk", "Українська", {
 	["type /reload to change the settings page too."] = "введи /reload, щоб також змінити сторінку налаштувань.",
 
 	-- Settings.
-	["Show gauge"] = "Показувати датчик",
-	["Off: the gauge and its status word leave the screen. The lines in chat stay, and so does the status in panels like Titan Panel. Type /feels to open the settings again."] =
-		"Вимкнено: датчик і статус зникають з екрана. Репліки в чаті лишаються, як і статус на панелях на кшталт Titan Panel. Щоб знову відкрити налаштування, введи /feels.",
+	["On screen"] = "На екрані",
+	["Gauge, status on hover"] = "Датчик, статус при наведенні",
+	["Gauge and status"] = "Датчик і статус",
+	["Gauge only"] = "Лише датчик",
+	["Status only"] = "Лише статус",
+	["Nothing"] = "Нічого",
+	["The status is one word: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy. Status only: the word shows without the gauge, and Scale sets its size. Nothing: only the lines in chat and the status in panels like Titan Panel stay. Type /feels to open the settings again."] =
+		"Статус — це одне слово: Морозно, Холодно, Помірно, Тепло, Спекотно, Пекельно або Затишно. Лише статус: слово показується без датчика, а «Масштаб» задає його розмір. Нічого: лишаються тільки репліки в чаті та статус на панелях на кшталт Titan Panel. Щоб знову відкрити налаштування, введи /feels.",
 	["Units"] = "Одиниці",
 	["Celsius"] = "Цельсій",
 	["Fahrenheit"] = "Фаренгейт",
 	["Unit symbol inside the gauge."] = "Позначка одиниць усередині датчика.",
-	["Show status"] = "Показувати статус",
-	["On hover"] = "При наведенні",
-	["Always"] = "Завжди",
-	["Never"] = "Ніколи",
-	["The status is one word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."] =
-		"Статус — це слово біля датчика: Морозно, Холодно, Помірно, Тепло, Спекотно, Пекельно або Затишно.",
 	["Tooltip on hover"] = "Підказка при наведенні",
-	["On: hover the gauge for a tooltip with the status and why it is so. Off: no tooltip, only the status word as set above."] =
-		"Увімкнено: наведи курсор на датчик, і підказка покаже статус та його опис. Вимкнено: підказки немає, лише статус, вказаний вище.",
+	["On: hover the gauge or the status for a tooltip that says why it is so. Off: no tooltip."] =
+		"Увімкнено: наведи курсор на датчик або статус, і підказка покаже, чому так. Вимкнено: підказки немає.",
 	["Feel by race"] = "Відчуття залежно від раси",
 	["Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren. It shows in cold and hot places: a mild place feels almost the same to everyone."] =
 		"Інтенсивність відчуття холоду та спеки змінюється залежно від раси. Дворфи краще переносять холод. Таурени витримують холод, але гірше переносять спеку, а тролі навпаки. Нежить майже не відчуває ні того, ні іншого. Друїди у формі кота, ведмедя, у подорожній, водній формі чи формі совуха мають хутро, як таурени. Різницю видно в холодних і спекотних місцях: у помірному місці всі почуваються майже однаково.",
@@ -98,11 +97,13 @@ ns.Locale.Add("uk", "Українська", {
 	["Reload"] = "Перезавантажити",
 	["Later"] = "Пізніше",
 	["Lock position"] = "Закріпити позицію",
-	["When unlocked, hold Shift and drag the gauge to move it."] = "Коли не закріплено, затисни Shift і тягни датчик, щоб пересунути.",
+	["When unlocked, hold Shift and drag the gauge or the status to move it."] =
+		"Коли не закріплено, затисни Shift і тягни датчик або статус, щоб пересунути.",
 	["Scale"] = "Масштаб",
 	["Position"] = "Позиція",
 	["Reset"] = "Скинути",
-	["Move the gauge back to its default place by the minimap."] = "Повернути датчик на типове місце біля мінікарти.",
+	["Move the gauge or the status back to its default place by the minimap."] =
+		"Повернути датчик або статус на типове місце біля мінікарти.",
 
 	-- Lines in chat: the cold and the heat.
 	["You shiver from the cold. (/shiver)"] = "Ти тремтиш від холоду. (/shiver)",

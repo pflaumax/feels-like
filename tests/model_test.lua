@@ -566,7 +566,8 @@ end
 local STATUS_WORDS = { "Freezing", "Cold", "Mild", "Warm", "Hot", "Scorching", "Cozy" }
 -- A text that names other texts has to name them as they are translated.
 local NAMES_INSIDE = {
-	["The status is one word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."] = STATUS_WORDS,
+	["The status is one word: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy. Status only: the word shows without the gauge, and Scale sets its size. Nothing: only the lines in chat and the status in panels like Titan Panel stay. Type /feels to open the settings again."] =
+		{ "Freezing", "Cold", "Mild", "Warm", "Hot", "Scorching", "Cozy", "Status only", "Nothing", "Scale" },
 	["Only for undead characters, while Feel by race is on. Numb: dead flesh hardly feels the weather, but it fears fire: a fire spell in a fight scorches it for a moment. Like the living: they feel the weather like a human."] =
 		{ "Feel by race", "Numb", "Like the living" },
 }

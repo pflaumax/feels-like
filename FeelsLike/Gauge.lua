@@ -36,7 +36,9 @@ local velocity = 0 -- of the needle
 local glow, glowFrom = 0, 0
 local db
 local hovered = false
+local hoveredFrame -- the gauge or the word, whichever the mouse is on
 local moving = false
+local movingWord = false -- the player holds the word, not the gauge
 -- Where the gauge was when the move started, to tell a move from a click.
 local moveStartX, moveStartY
 local MOVED = 1 -- pixels that count as a real move
@@ -58,8 +60,29 @@ Gauge.TITLE_COLOR, Gauge.HINT_COLOR = TITLE_COLOR, HINT_COLOR -- the panel feed 
 local tooltipShown
 
 Gauge.target = 0 -- the reading
-Gauge.display = 0 -- where the needle is: on its way, or at rest as near the reading as the dial can show
+Gauge.needle = 0 -- where the needle is: on its way, or at rest as near the reading as the dial can show
 Gauge.cozy = false
+
+-- What shows on screen. gauge: the dial is drawn. word: the status word shows on hover, always or never next to
+-- the gauge, or alone in its place.
+-- name is the English text of the choice in the settings.
+Gauge.DISPLAY = {
+	gaugeHover = { gauge = true, word = "hover", name = "Gauge, status on hover" },
+	gaugeStatus = { gauge = true, word = "always", name = "Gauge and status" },
+	gauge = { gauge = true, word = "never", name = "Gauge only" },
+	status = { gauge = false, word = "alone", name = "Status only" },
+	none = { gauge = false, word = "never", name = "Nothing" },
+}
+Gauge.DISPLAY_ORDER = { "gaugeHover", "gaugeStatus", "gauge", "status", "none" }
+-- The word alone never gets smaller than this, so it stays readable.
+local MIN_WORD_SCALE = 0.75
+
+-- The frame that holds the word, and the frame that takes the mouse for the word alone.
+local labelFrame, status
+
+local function Mode()
+	return Gauge.DISPLAY[db.display] or Gauge.DISPLAY.gaugeHover
+end
 
 -- Offset of a frame from the minimap center in screen pixels.
 local function OffsetFromMinimap(target)
@@ -80,7 +103,7 @@ local function IsClassicMinimap()
 	return ns.Sensors.isForever and Minimap ~= nil and Minimap:GetWidth() < CLASSIC_MINIMAP_WIDTH
 end
 
--- The label goes on the side away from the minimap.
+-- The label goes on the side away from the minimap. The word alone far from the minimap takes the gauge's place.
 local function PlaceLabel()
 	label:ClearAllPoints()
 	local dx, dy, radius = OffsetFromMinimap(frame)
@@ -97,12 +120,16 @@ local function PlaceLabel()
 			label:SetPoint("BOTTOM", frame, "TOP", 0, LABEL_GAP)
 			return
 		end
+	elseif Mode().word == "alone" then
+		label:SetPoint("CENTER", frame, "CENTER", 0, 0)
+		return
 	end
 	label:SetPoint("TOP", frame, "BOTTOM", 0, -LABEL_GAP)
 end
 
 local function UpdateLabel()
-	local visible = db.gauge and (db.label == "always" or (db.label == "hover" and hovered))
+	local word = Mode().word
+	local visible = word == "always" or word == "alone" or (word == "hover" and hovered)
 	if not visible then
 		label:Hide()
 		return
@@ -110,7 +137,10 @@ local function UpdateLabel()
 	local band = Model.Band(Gauge.target, Gauge.cozy)
 	label:SetText(T(band.word))
 	label:SetTextColor(band.color[1], band.color[2], band.color[3])
-	PlaceLabel() -- the minimap may have moved
+	-- The minimap may have moved. During a move the word keeps its side, so it stays under the mouse.
+	if not moving then
+		PlaceLabel()
+	end
 	label:Show()
 end
 
@@ -175,7 +205,7 @@ local function UpdateTooltip(fresh)
 		return
 	end
 	tooltipShown = shown
-	tooltip:SetOwner(frame, anchor)
+	tooltip:SetOwner(hoveredFrame or frame, anchor)
 	tooltip:SetText(T(band.word), band.color[1], band.color[2], band.color[3])
 	if reasons.test then
 		tooltip:AddLine(T("A test value. /feels test off ends it."), HINT_COLOR[1], HINT_COLOR[2], HINT_COLOR[3], true)
@@ -192,27 +222,51 @@ local function UpdateTooltip(fresh)
 end
 
 -- A locked gauge only needs the mouse for the hover label and the tooltip. With neither it lets clicks through.
+-- A word that always shows takes the mouse like the gauge, and a gauge that is not drawn never takes it.
 local function UpdateMouse()
-	local enabled = not db.locked or db.label == "hover" or db.tooltip
-	frame:EnableMouse(enabled)
-	if not enabled and hovered then
-		hovered = false
+	local mode = Mode()
+	local onGauge = mode.gauge and (not db.locked or mode.word == "hover" or db.tooltip)
+	local onWord = (mode.word == "alone" or mode.word == "always") and (not db.locked or db.tooltip)
+	frame:EnableMouse(onGauge)
+	status:EnableMouse(onWord)
+	if not (onGauge or onWord) and hovered then
+		hovered, hoveredFrame = false, nil
 		tooltip:Hide()
+	end
+end
+
+-- The gauge is shown at all but in Nothing. Without the dial it is an empty frame that only gives the word its
+-- place and moves it: a shown frame always has a place. It then keeps the default size, so the word sits where
+-- it shows next to the gauge today, and Scale sizes the word.
+local function ApplyLook()
+	local mode = Mode()
+	local defaultScale = ns.DEFAULTS.scale
+	frame:SetShown(mode.gauge or mode.word == "alone")
+	frame:SetAlpha(mode.gauge and 1 or 0)
+	if not mode.gauge then
+		frame:SetScript("OnUpdate", nil) -- no needle to move
+	end
+	if mode.word == "alone" then
+		frame:SetScale(defaultScale)
+		labelFrame:SetScale(math.max(MIN_WORD_SCALE, db.scale / defaultScale))
+	else
+		frame:SetScale(db.scale)
+		labelFrame:SetScale(1)
 	end
 end
 
 local function OnUpdate(self, elapsed)
 	-- The dial knows where its needle can rest for this reading.
 	local aim = dial:Rest(Gauge.target)
-	Gauge.display, velocity = Model.NeedleStep(Gauge.display, velocity, aim, elapsed)
+	Gauge.needle, velocity = Model.NeedleStep(Gauge.needle, velocity, aim, elapsed)
 	-- The glow follows the needle on its way but stops at the reading: a needle that swings past Hot must not
 	-- light the ring like Scorching.
-	glow = math.max(math.min(glowFrom, Gauge.target), math.min(Gauge.display, math.max(glowFrom, Gauge.target)))
-	if math.abs(aim - Gauge.display) < NEEDLE_REST and math.abs(velocity) < NEEDLE_REST_SPEED then
-		Gauge.display, velocity, glow = aim, 0, Gauge.target
+	glow = math.max(math.min(glowFrom, Gauge.target), math.min(Gauge.needle, math.max(glowFrom, Gauge.target)))
+	if math.abs(aim - Gauge.needle) < NEEDLE_REST and math.abs(velocity) < NEEDLE_REST_SPEED then
+		Gauge.needle, velocity, glow = aim, 0, Gauge.target
 		self:SetScript("OnUpdate", nil)
 	end
-	dial:Render(Gauge.display, glow)
+	dial:Render(Gauge.needle, glow)
 end
 
 local function SavePosition()
@@ -222,6 +276,79 @@ local function SavePosition()
 	db.x = x * scale - parentX
 	db.y = y * scale - parentY
 	Gauge:ApplyPosition()
+end
+
+-- Where the word is, in the units of the screen's UI.
+local function WordCenter()
+	local x, y = label:GetCenter()
+	if not x then
+		return nil
+	end
+	local scale = label:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	return x * scale, y * scale
+end
+
+-- After a move the word picks its side of the place again. The player moved the word itself, so it goes back to
+-- where it was let go, on the side it has now: a second choice could put it somewhere else again.
+local function KeepWordAt(x, y)
+	local newX, newY = WordCenter()
+	if not (x and newX) then
+		return
+	end
+	db.x, db.y = db.x + x - newX, db.y + y - newY
+	Gauge:ApplyPosition(true)
+end
+
+-- Shift is needed to move. The move starts at the press, so it follows the mouse at once: a drag only starts
+-- after the mouse has moved some way. The gauge frame moves, also when the player holds the word, and the word
+-- with it.
+local function OnPress(self, button)
+	if button ~= "LeftButton" or db.locked or not IsShiftKeyDown() then
+		return
+	end
+	moving, movingWord = true, self == status
+	moveStartX, moveStartY = frame:GetCenter()
+	frame:StartMoving()
+end
+
+-- Only save a real move. A press without a move keeps the old place.
+local function OnRelease()
+	if not moving then
+		return
+	end
+	moving = false
+	frame:StopMovingOrSizing()
+	local x, y = frame:GetCenter()
+	if x and moveStartX and (math.abs(x - moveStartX) >= MOVED or math.abs(y - moveStartY) >= MOVED) then
+		local wordX, wordY = WordCenter()
+		SavePosition()
+		if movingWord then
+			KeepWordAt(wordX, wordY)
+		end
+	else
+		Gauge:ApplyPosition()
+	end
+end
+
+local function OnEnter(self)
+	hovered, hoveredFrame = true, self
+	UpdateLabel()
+	UpdateTooltip(true)
+end
+
+local function OnLeave()
+	hovered, hoveredFrame = false, nil
+	UpdateLabel()
+	tooltip:Hide()
+end
+
+-- The needle stands still while the dial is not drawn. Back on screen it shows the reading at once, with no swing
+-- across the dial.
+local function SnapNeedle()
+	Gauge.needle, velocity = dial:Rest(Gauge.target), 0
+	glow, glowFrom = Gauge.target, Gauge.target
+	frame:SetScript("OnUpdate", nil)
+	dial:Render(Gauge.needle, glow)
 end
 
 function Gauge:Create(savedVariables)
@@ -244,7 +371,7 @@ function Gauge:Create(savedVariables)
 	tooltip = CreateFrame("GameTooltip", "FeelsLikeTooltip", UIParent, "SharedTooltipTemplate")
 
 	-- The label has its own frame so it stays readable at small sizes.
-	local labelFrame = CreateFrame("Frame", nil, UIParent)
+	labelFrame = CreateFrame("Frame", nil, UIParent)
 	labelFrame:SetFrameStrata(frame:GetFrameStrata())
 	-- A dark outline keeps the word readable on snow, sand and other bright ground. The game's own outlined
 	-- font keeps the letters of every alphabet. Without it, the outline goes on the plain font.
@@ -258,31 +385,17 @@ function Gauge:Create(savedVariables)
 		end
 	end
 
-	-- Shift is needed to move the gauge. The move starts at the press, so it follows the mouse at once:
-	-- a drag only starts after the mouse has moved some way.
-	frame:SetScript("OnMouseDown", function(self, button)
-		if button ~= "LeftButton" or db.locked or not IsShiftKeyDown() then
-			return
-		end
-		moving = true
-		moveStartX, moveStartY = self:GetCenter()
-		self:StartMoving()
-	end)
-	-- Only save a real move. A press without a move keeps the old place.
-	frame:SetScript("OnMouseUp", function(self)
-		if not moving then
-			return
-		end
-		moving = false
-		self:StopMovingOrSizing()
-		local x, y = self:GetCenter()
-		if x and moveStartX and (math.abs(x - moveStartX) >= MOVED or math.abs(y - moveStartY) >= MOVED) then
-			SavePosition()
-		else
-			Gauge:ApplyPosition()
-		end
-	end)
-	-- A drag without Shift moves nothing, so say why, once.
+	-- The word alone takes the mouse in a frame of its own, the size of the word.
+	status = CreateFrame("Frame", "FeelsLikeStatus", UIParent)
+	status:SetFrameStrata(frame:GetFrameStrata())
+	status:SetAllPoints(label)
+	for _, target in ipairs({ frame, status }) do
+		target:SetScript("OnMouseDown", OnPress)
+		target:SetScript("OnMouseUp", OnRelease)
+		target:SetScript("OnEnter", OnEnter)
+		target:SetScript("OnLeave", OnLeave)
+	end
+	-- A drag of the gauge without Shift moves nothing, so say why, once.
 	frame:SetScript("OnDragStart", function()
 		if moving or hintShown then
 			return
@@ -290,16 +403,6 @@ function Gauge:Create(savedVariables)
 		hintShown = true
 		ns.Print(T(db.locked and "the gauge is locked. Unlock it in the settings: /feels"
 			or "hold Shift and drag to move the gauge."))
-	end)
-	frame:SetScript("OnEnter", function()
-		hovered = true
-		UpdateLabel()
-		UpdateTooltip(true)
-	end)
-	frame:SetScript("OnLeave", function()
-		hovered = false
-		UpdateLabel()
-		tooltip:Hide()
 	end)
 
 	-- The minimap can change size or place after login.
@@ -318,10 +421,9 @@ function Gauge:Create(savedVariables)
 
 	self:SetUnit(db.unit)
 	self:SetScale(db.scale)
-	self:SetLabelMode(db.label)
 	self:SetLocked(db.locked)
-	self:SetShown(db.gauge)
-	dial:Render(self.display)
+	self:SetDisplay(db.display)
+	dial:Render(self.needle)
 end
 
 function Gauge:SetTarget(t)
@@ -331,7 +433,9 @@ function Gauge:SetTarget(t)
 	end
 	self.target = t
 	glowFrom = glow -- the glow moves on from where it is
-	frame:SetScript("OnUpdate", OnUpdate)
+	if Mode().gauge then
+		frame:SetScript("OnUpdate", OnUpdate)
+	end
 	UpdateLabel()
 end
 
@@ -360,7 +464,7 @@ function Gauge:SetUnit(unit)
 	dial:SetUnit(unit)
 end
 
--- The tooltip on hover can be turned off. The word next to the gauge has its own setting.
+-- The tooltip on hover can be turned off. The word has its own place in On screen.
 function Gauge:SetTooltip(on)
 	db.tooltip = on
 	UpdateMouse()
@@ -373,31 +477,20 @@ function Gauge:SetTooltip(on)
 	end
 end
 
--- mode is hover, always or never.
-function Gauge:SetLabelMode(mode)
-	db.label = mode
-	UpdateLabel()
+-- What shows on screen, a key of Gauge.DISPLAY. The readings, the lines in chat and the panel feed go on in all.
+function Gauge:SetDisplay(key)
+	local wasDrawn = frame:IsShown() and Mode().gauge
+	db.display = key
+	-- The game may not say the mouse left a frame that hides or stops taking the mouse, and the tooltip is
+	-- filled again each update.
+	hovered, hoveredFrame = false, nil
+	tooltip:Hide()
+	ApplyLook()
+	self:ApplyPosition() -- after the scale of the frame, which the offsets depend on
+	if Mode().gauge and not wasDrawn then
+		SnapNeedle()
+	end
 	UpdateMouse()
-end
-
--- The gauge can leave the screen with its word. The readings, the lines in chat and the panel feed go on.
-function Gauge:SetShown(on)
-	db.gauge = on
-	local cameBack = on and not frame:IsShown()
-	if not on then
-		-- The game may not say the mouse left a frame that hides, and the tooltip is filled again each update.
-		hovered = false
-		tooltip:Hide()
-	end
-	frame:SetShown(on)
-	if cameBack then
-		self:ApplyPosition() -- the minimap may have moved
-		-- A hidden needle stands still. Back on screen it shows the reading at once, with no swing across the dial.
-		Gauge.display, velocity = dial:Rest(Gauge.target), 0
-		glow, glowFrom = Gauge.target, Gauge.target
-		frame:SetScript("OnUpdate", nil)
-		dial:Render(Gauge.display, glow)
-	end
 	UpdateLabel()
 end
 
@@ -406,13 +499,15 @@ function Gauge:SetLocked(locked)
 	UpdateMouse()
 end
 
+-- The size of the gauge, or of the word alone.
 function Gauge:SetScale(scale)
-	frame:SetScale(scale)
+	db.scale = scale
+	ApplyLook()
 	self:ApplyPosition()
 end
 
--- Offsets are in the frame's own scale.
-function Gauge:ApplyPosition()
+-- Offsets are in the frame's own scale. keepSide leaves the word on the side of the place it has now.
+function Gauge:ApplyPosition(keepSide)
 	local classic = IsClassicMinimap()
 	dial:SetClassic(classic) -- the ring follows the minimap buttons
 	local scale = frame:GetScale()
@@ -427,7 +522,9 @@ function Gauge:ApplyPosition()
 	else
 		frame:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", FALLBACK_X / scale, FALLBACK_Y / scale)
 	end
-	PlaceLabel()
+	if not keepSide then
+		PlaceLabel()
+	end
 end
 
 -- Where a frame sits by the minimap, for /feels measure.
@@ -453,7 +550,7 @@ end
 function Gauge:DescribePosition()
 	local layout = IsClassicMinimap() and ", classic-style minimap" or ""
 	-- The game may not place a frame that was never shown.
-	local off = db.gauge and "" or ", off in settings"
+	local off = Mode() == Gauge.DISPLAY.none and ", off in settings" or ""
 	return (db.x and "moved" or "default") .. layout .. off .. "; " .. self:Describe(frame)
 end
 
@@ -500,11 +597,12 @@ function Gauge:DescribeFrames()
 	local parent = frame:GetParent()
 	local held = (moving and ", moving with the mouse" or "") .. (frame:IsDragging() and ", dragged" or "")
 	local lines = {
-		string.format("frame: %s%s, alpha %.2f, scale %.2f, parent %s, %s level %d, mouse %s%s",
-			db.gauge and "" or "off in settings, ", DescribeRegion(frame),
+		"on screen: " .. tostring(db.display),
+		string.format("frame: %s, alpha %.2f, scale %.2f, parent %s, %s level %d, mouse %s%s", DescribeRegion(frame),
 			frame:GetEffectiveAlpha(), frame:GetScale(), parent and FrameName(parent) or "none",
 			frame:GetFrameStrata(), frame:GetFrameLevel(), frame:IsMouseEnabled() and "on" or "off", held),
-		string.format("label: %s, alpha %.2f", DescribeRegion(label), label:GetAlpha()),
+		string.format("label: %s, alpha %.2f, scale %.2f, mouse %s", DescribeRegion(label), label:GetAlpha(),
+			labelFrame:GetScale(), status:IsMouseEnabled() and "on" or "off"),
 	}
 	if Minimap then
 		lines[#lines + 1] = string.format("minimap: %s, %.0f wide, scale %.2f", DescribeRegion(Minimap),

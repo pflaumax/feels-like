@@ -3,9 +3,8 @@
 local addonName, ns = ...
 
 ns.DEFAULTS = {
-	gauge = true,
+	display = "gaugeHover",
 	unit = "C",
-	label = "hover",
 	tooltip = true,
 	locked = false,
 	race = true,
@@ -121,7 +120,9 @@ function ns.SetLanguage(language)
 end
 
 -- Version of the saved settings.
-local DB_VERSION = 3
+local DB_VERSION = 4
+-- Before version 4 two settings chose what shows: Show status (label) and, in 0.3.2, Show gauge (gauge).
+local DISPLAY_OF_LABEL = { hover = "gaugeHover", always = "gaugeStatus", never = "gauge" }
 -- Default scale of version 0.1.0.
 local OLD_DEFAULT_SCALE = 0.45
 
@@ -134,7 +135,15 @@ local function InitDB()
 	if (FeelsLikeDB.version or 1) < 3 and FeelsLikeDB.language == ns.Locale.DEFAULT then
 		FeelsLikeDB.language = nil
 	end
+	if (FeelsLikeDB.version or 1) < 4 and FeelsLikeDB.display == nil then
+		FeelsLikeDB.display = FeelsLikeDB.gauge == false and "none" or DISPLAY_OF_LABEL[FeelsLikeDB.label]
+	end
+	FeelsLikeDB.gauge, FeelsLikeDB.label = nil, nil
 	FeelsLikeDB.version = DB_VERSION
+	-- A choice of what shows that is gone goes back to the default.
+	if FeelsLikeDB.display ~= nil and not ns.Gauge.DISPLAY[FeelsLikeDB.display] then
+		FeelsLikeDB.display = nil
+	end
 	-- A language that is gone goes back to the default.
 	if FeelsLikeDB.language ~= nil and not ns.Locale.Has(FeelsLikeDB.language) then
 		FeelsLikeDB.language = nil

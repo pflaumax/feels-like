@@ -62,22 +62,21 @@ ns.Locale.Add("de", "Deutsch", {
 	["type /reload to change the settings page too."] = "gebt /reload ein, um auch die Einstellungsseite umzustellen.",
 
 	-- Settings.
-	["Show gauge"] = "Thermometer anzeigen",
-	["Off: the gauge and its status word leave the screen. The lines in chat stay, and so does the status in panels like Titan Panel. Type /feels to open the settings again."] =
-		"Aus: Das Thermometer und sein Statuswort verschwinden vom Bildschirm. Die Stimmungstexte im Chat bleiben, ebenso der Status in Leisten wie Titan Panel. Mit /feels öffnet Ihr die Einstellungen wieder.",
+	["On screen"] = "Auf dem Bildschirm",
+	["Gauge, status on hover"] = "Thermometer, Status bei Mouseover",
+	["Gauge and status"] = "Thermometer und Status",
+	["Gauge only"] = "Nur Thermometer",
+	["Status only"] = "Nur Status",
+	["Nothing"] = "Nichts",
+	["The status is one word: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy. Status only: the word shows without the gauge, and Scale sets its size. Nothing: only the lines in chat and the status in panels like Titan Panel stay. Type /feels to open the settings again."] =
+		"Der Status ist ein Wort: Eisig, Kalt, Mild, Warm, Heiß, Sengend oder Gemütlich. Nur Status: Das Wort erscheint ohne Thermometer, und \"Skalierung\" bestimmt seine Größe. Nichts: Es bleiben nur die Stimmungstexte im Chat und der Status in Leisten wie Titan Panel. Mit /feels öffnet Ihr die Einstellungen wieder.",
 	["Units"] = "Einheiten",
 	["Celsius"] = "Celsius",
 	["Fahrenheit"] = "Fahrenheit",
 	["Unit symbol inside the gauge."] = "Einheitenzeichen im Thermometer.",
-	["Show status"] = "Status anzeigen",
-	["On hover"] = "Bei Mouseover",
-	["Always"] = "Immer",
-	["Never"] = "Nie",
-	["The status is one word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."] =
-		"Der Status ist ein Wort neben dem Thermometer: Eisig, Kalt, Mild, Warm, Heiß, Sengend oder Gemütlich.",
 	["Tooltip on hover"] = "Tooltip bei Mouseover",
-	["On: hover the gauge for a tooltip with the status and why it is so. Off: no tooltip, only the status word as set above."] =
-		"An: Fahrt mit der Maus über das Thermometer, um einen Tooltip mit dem Status und dem Grund dafür zu sehen. Aus: kein Tooltip, nur das Statuswort wie oben eingestellt.",
+	["On: hover the gauge or the status for a tooltip that says why it is so. Off: no tooltip."] =
+		"An: Fahrt mit der Maus über das Thermometer oder den Status, um in einem Tooltip den Grund zu sehen. Aus: kein Tooltip.",
 	["Feel by race"] = "Empfinden nach Volk",
 	["Your race changes how strongly you feel the cold and the heat. Dwarves handle the cold better. Tauren handle the cold but feel the heat more, and trolls the other way round. The undead feel little of either. Druids in cat, bear, travel, aquatic or moonkin form have fur, like tauren. It shows in cold and hot places: a mild place feels almost the same to everyone."] =
 		"Euer Volk bestimmt, wie stark Ihr Kälte und Hitze spürt. Zwerge vertragen Kälte besser. Tauren vertragen Kälte, leiden aber stärker unter Hitze, bei Trollen ist es umgekehrt. Untote spüren von beidem wenig. Druiden in Katzen-, Bären-, Reise-, Wasser- oder Mondkingestalt haben ein Fell, wie Tauren. Das zeigt sich an kalten und heißen Orten: Ein milder Ort fühlt sich für alle fast gleich an.",
@@ -100,13 +99,13 @@ ns.Locale.Add("de", "Deutsch", {
 	["Reload"] = "Neu laden",
 	["Later"] = "Später",
 	["Lock position"] = "Position sperren",
-	["When unlocked, hold Shift and drag the gauge to move it."] =
-		"Wenn nicht gesperrt: Umschalt gedrückt halten und das Thermometer ziehen, um es zu verschieben.",
+	["When unlocked, hold Shift and drag the gauge or the status to move it."] =
+		"Wenn nicht gesperrt, verschiebt Ihr das Thermometer oder den Status, indem Ihr Umschalt gedrückt haltet und zieht.",
 	["Scale"] = "Skalierung",
 	["Position"] = "Position",
 	["Reset"] = "Zurücksetzen",
-	["Move the gauge back to its default place by the minimap."] =
-		"Setzt das Thermometer an seinen Standardplatz bei der Minikarte zurück.",
+	["Move the gauge or the status back to its default place by the minimap."] =
+		"Setzt das Thermometer oder den Status an seinen Standardplatz bei der Minikarte zurück.",
 
 	-- Lines in chat: the cold and the heat.
 	["You shiver from the cold. (/shiver)"] = "Ihr zittert vor Kälte. (/shiver)",

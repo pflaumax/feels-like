@@ -85,16 +85,15 @@ The gauge sits by the minimap. Hold Shift and drag it to move it anywhere you li
 
 Open Options, then AddOns, then Feels Like. You can
 
-- hide the gauge and keep only the lines in chat (and the status in a panel like Titan Panel)
+- choose what shows by the minimap: the gauge with the status word on hover, the gauge and the word, only the gauge, only the word, or nothing but the lines in chat
 - switch between Celsius and Fahrenheit
-- show the status word on hover, always or never
 - turn the tooltip on hover on or off
 - choose whether your race changes how you feel
 - choose how the undead feel: numb or like the living
 - turn seasons and holidays on or off
 - turn the lines in chat on or off
 - pick the language: English, Ukrainian, German, French, Spanish or Portuguese
-- lock the gauge in place
+- lock the gauge or the word in place
 - change its size
 - put it back by the minimap
 

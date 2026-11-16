@@ -24,11 +24,11 @@ local function UnitOptions()
 	return container:GetData()
 end
 
-local function LabelOptions()
+local function DisplayOptions()
 	local container = Settings.CreateControlTextContainer()
-	container:Add("hover", T("On hover"))
-	container:Add("always", T("Always"))
-	container:Add("never", T("Never"))
+	for _, key in ipairs(ns.Gauge.DISPLAY_ORDER) do
+		container:Add(key, T(ns.Gauge.DISPLAY[key].name))
+	end
 	return container:GetData()
 end
 
@@ -57,13 +57,13 @@ function Options:Register(db)
 	local defaults = ns.DEFAULTS
 	local category, layout = Settings.RegisterVerticalLayoutCategory("Feels Like")
 
-	local gauge = Settings.RegisterAddOnSetting(category, "FEELSLIKE_GAUGE", "gauge", db,
-		Settings.VarType.Boolean, T("Show gauge"), defaults.gauge)
-	gauge:SetValueChangedCallback(function(_, value)
-		ns.Gauge:SetShown(value)
+	local display = Settings.RegisterAddOnSetting(category, "FEELSLIKE_DISPLAY", "display", db,
+		Settings.VarType.String, T("On screen"), defaults.display)
+	display:SetValueChangedCallback(function(_, value)
+		ns.Gauge:SetDisplay(value)
 	end)
-	Settings.CreateCheckbox(category, gauge,
-		T("Off: the gauge and its status word leave the screen. The lines in chat stay, and so does the status in panels like Titan Panel. Type /feels to open the settings again."))
+	Settings.CreateDropdown(category, display, DisplayOptions,
+		T("The status is one word: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy. Status only: the word shows without the gauge, and Scale sets its size. Nothing: only the lines in chat and the status in panels like Titan Panel stay. Type /feels to open the settings again."))
 
 	local unit = Settings.RegisterAddOnSetting(category, "FEELSLIKE_UNIT", "unit", db,
 		Settings.VarType.String, T("Units"), defaults.unit)
@@ -72,21 +72,13 @@ function Options:Register(db)
 	end)
 	Settings.CreateDropdown(category, unit, UnitOptions, T("Unit symbol inside the gauge."))
 
-	local label = Settings.RegisterAddOnSetting(category, "FEELSLIKE_LABEL", "label", db,
-		Settings.VarType.String, T("Show status"), defaults.label)
-	label:SetValueChangedCallback(function(_, value)
-		ns.Gauge:SetLabelMode(value)
-	end)
-	Settings.CreateDropdown(category, label, LabelOptions,
-		T("The status is one word next to the gauge: Freezing, Cold, Mild, Warm, Hot, Scorching or Cozy."))
-
 	local tooltip = Settings.RegisterAddOnSetting(category, "FEELSLIKE_TOOLTIP", "tooltip", db,
 		Settings.VarType.Boolean, T("Tooltip on hover"), defaults.tooltip)
 	tooltip:SetValueChangedCallback(function(_, value)
 		ns.Gauge:SetTooltip(value)
 	end)
 	Settings.CreateCheckbox(category, tooltip,
-		T("On: hover the gauge for a tooltip with the status and why it is so. Off: no tooltip, only the status word as set above."))
+		T("On: hover the gauge or the status for a tooltip that says why it is so. Off: no tooltip."))
 
 	local race = Settings.RegisterAddOnSetting(category, "FEELSLIKE_RACE", "race", db,
 		Settings.VarType.Boolean, T("Feel by race"), defaults.race)
@@ -121,7 +113,7 @@ function Options:Register(db)
 	locked:SetValueChangedCallback(function(_, value)
 		ns.Gauge:SetLocked(value)
 	end)
-	Settings.CreateCheckbox(category, locked, T("When unlocked, hold Shift and drag the gauge to move it."))
+	Settings.CreateCheckbox(category, locked, T("When unlocked, hold Shift and drag the gauge or the status to move it."))
 
 	local scale = Settings.RegisterAddOnSetting(category, "FEELSLIKE_SCALE", "scale", db,
 		Settings.VarType.Number, T("Scale"), defaults.scale)
@@ -134,7 +126,7 @@ function Options:Register(db)
 
 	layout:AddInitializer(CreateSettingsButtonInitializer(T("Position"), T("Reset"), function()
 		ns.Gauge:ResetPosition()
-	end, T("Move the gauge back to its default place by the minimap."), true))
+	end, T("Move the gauge or the status back to its default place by the minimap."), true))
 
 	Settings.RegisterAddOnCategory(category)
 	self.category = category

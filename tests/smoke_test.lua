@@ -27,12 +27,14 @@ local function Widget()
 	widget.CreateTexture = function() return Widget() end
 	widget.CreateMaskTexture = function() return Widget() end
 	widget.CreateLine = function() return Widget() end
-	widget.CreateFontString = function(_, _, _, template)
+	widget.CreateFontString = function(self, _, _, template)
 		local fontString = Widget()
+		fontString.parent = self
 		fontStrings[template] = fontString
 		return fontString
 	end
 	widget.SetPoint = function(self, ...) self.point = { ... } end
+	widget.SetAllPoints = function(self, target) self.allPoints = target end
 	widget.Show = function(self) self.shown = true end
 	widget.Hide = function(self) self.shown = false end
 	widget.SetShown = function(self, shown) self.shown = not not shown end
@@ -359,7 +361,7 @@ for _, layer in ipairs(vectorLayers) do
 		file:close()
 	end
 end
-check("defaults saved", FeelsLikeDB.unit == "C" and FeelsLikeDB.label == "hover" and FeelsLikeDB.locked == false and FeelsLikeDB.scale == 0.53
+check("defaults saved", FeelsLikeDB.unit == "C" and FeelsLikeDB.display == "gaugeHover" and FeelsLikeDB.label == nil and FeelsLikeDB.locked == false and FeelsLikeDB.scale == 0.53
 	and FeelsLikeDB.race == true and FeelsLikeDB.undead == "numb")
 check("race setting registered", settings.FEELSLIKE_RACE ~= nil)
 check("undead setting registered", settings.FEELSLIKE_UNDEAD ~= nil)
@@ -394,12 +396,12 @@ local function ShownNeedles()
 	return solid, fading
 end
 local neverGone, neighboursOnly, sawFading, filesNeverReloaded = true, true, false, true
-local lowest = Gauge.display
+local lowest = Gauge.needle
 for _ = 1, 200 do
 	local onUpdate = gaugeFrame.scripts.OnUpdate
 	if not onUpdate then break end -- removed once the needle settles
 	onUpdate(gaugeFrame, 0.02)
-	lowest = math.min(lowest, Gauge.display)
+	lowest = math.min(lowest, Gauge.needle)
 	local solid, fading = ShownNeedles()
 	-- One needle is always solid. At most one more shows, right next to it.
 	neverGone = neverGone and #solid >= 1
@@ -418,9 +420,9 @@ check("the needle glides between two steps", sawFading)
 check("needle layers never load a new file", filesNeverReloaded)
 check("needle stops updating once settled", gaugeFrame.scripts.OnUpdate == nil)
 -- It rests on the step nearest the reading, so only one needle shows.
-check("needle settled on the nearest step", math.abs(Gauge.display - (-100 + 200 * 5 / 90)) < 1e-9
-	and math.abs(Gauge.display - Gauge.target) <= 200 / 90 / 2, Gauge.display)
-check("the needle swings a little past the reading", lowest < Gauge.display - 2 and lowest > Gauge.display - 9, lowest)
+check("needle settled on the nearest step", math.abs(Gauge.needle - (-100 + 200 * 5 / 90)) < 1e-9
+	and math.abs(Gauge.needle - Gauge.target) <= 200 / 90 / 2, Gauge.needle)
+check("the needle swings a little past the reading", lowest < Gauge.needle - 2 and lowest > Gauge.needle - 9, lowest)
 local solidAtRest, fadingAtRest = ShownNeedles()
 check("one needle at rest", #solidAtRest == 1 and #fadingAtRest == 0, #solidAtRest .. " " .. #fadingAtRest)
 check("needle at step 05", VisibleNeedles()[1] == "05", table.concat(VisibleNeedles(), ","))
@@ -629,39 +631,209 @@ gauge.scripts.OnEnter()
 check("label on hover", label.shown and label.text == "Freezing", label.text)
 gauge.scripts.OnLeave()
 check("label hidden after hover", label.shown == false)
-settings.FEELSLIKE_LABEL.callback(nil, "always")
+settings.FEELSLIKE_DISPLAY.callback(nil, "gaugeStatus")
 check("label always", label.shown == true)
-settings.FEELSLIKE_LABEL.callback(nil, "hover")
-check("label back to hover", label.shown == false and FeelsLikeDB.label == "hover")
+settings.FEELSLIKE_DISPLAY.callback(nil, "gaugeHover")
+check("label back to hover", label.shown == false and FeelsLikeDB.display == "gaugeHover")
 
--- Show gauge: off takes the gauge and its word off the screen, on brings them back.
-check("gauge shown by default", FeelsLikeDB.gauge == true and settings.FEELSLIKE_GAUGE ~= nil and gauge.shown == true)
-settings.FEELSLIKE_LABEL.callback(nil, "always")
-settings.FEELSLIKE_GAUGE.callback(nil, false)
-check("gauge off hides the gauge and its word", gauge.shown == false and label.shown == false and FeelsLikeDB.gauge == false)
-check("debug says the gauge is off in the settings", Slash("debug"):find("frame: off in settings, hidden,", 1, true))
-settings.FEELSLIKE_GAUGE.callback(nil, true)
-check("gauge on shows the word again", gauge.shown == true and label.shown == true and label.text == "Freezing", label.text)
-check("debug says nothing of the setting with the gauge on", not Slash("debug"):find("off in settings", 1, true))
--- Hidden under the mouse: the game may not say that the mouse left, and the tooltip is filled each update.
-settings.FEELSLIKE_LABEL.callback(nil, "hover")
+-- On screen: one setting chooses the gauge, the word, both or nothing.
+check("on screen setting registered", settings.FEELSLIKE_DISPLAY ~= nil)
+local statusFrame = _G.FeelsLikeStatus
+local wordFrame = label:GetParent()
 local gaugeTooltip = _G.FeelsLikeTooltip
-gauge.scripts.OnEnter()
-check("tooltip on hover before the gauge hides", gaugeTooltip.shown == true)
-settings.FEELSLIKE_GAUGE.callback(nil, false)
-check("the tooltip goes with the gauge", gaugeTooltip.shown == false)
+check("the word alone has its own mouse frame the size of the word", statusFrame ~= nil and statusFrame.allPoints == label)
+local function Looks()
+	return string.format("gauge %s %.0f, word %s, mouse %s %s", gauge.shown and "shown" or "hidden", gauge:GetAlpha(),
+		label.shown and "shown" or "hidden", tostring(gauge.mouse), tostring(statusFrame.mouse))
+end
+local LOOKS = {
+	gaugeHover = "gauge shown 1, word hidden, mouse true false",
+	gaugeStatus = "gauge shown 1, word shown, mouse true true",
+	gauge = "gauge shown 1, word hidden, mouse true false",
+	status = "gauge shown 0, word shown, mouse false true",
+	none = "gauge hidden 0, word hidden, mouse false false",
+}
+for _, key in ipairs(ns.Gauge.DISPLAY_ORDER) do
+	settings.FEELSLIKE_DISPLAY.callback(nil, key)
+	check("on screen " .. key, Looks() == LOOKS[key] and FeelsLikeDB.display == key, Looks())
+end
+check("debug says what shows", Slash("debug"):find("on screen: none", 1, true))
+check("debug says where the hidden gauge would be", Slash("debug"):find("position: default, off in settings; ", 1, true))
+
+-- Status only: the word without the gauge, in its place, and Scale sizes the word.
+settings.FEELSLIKE_DISPLAY.callback(nil, "status")
+check("status only shows the word at once", label.shown == true and label.text == "Freezing", label.text)
+check("the empty gauge keeps the default size", gauge.scale == 0.53 and wordFrame.scale == 1, gauge.scale .. " " .. wordFrame.scale)
+check("debug shows the word alone", Slash("debug"):find("label: shown, at 500, 300, CENTER on CENTER of FeelsLikeGauge, 0, 0, alpha 1.00, scale 1.00, mouse on", 1, true),
+	Slash("debug"))
+check("debug says status only", Slash("debug"):find("on screen: status", 1, true))
+check("no position note in status only", not Slash("debug"):find("off in settings;", 1, true))
+settings.FEELSLIKE_SCALE.callback(nil, 1.06)
+check("scale sizes the word alone", gauge.scale == 0.53 and math.abs(wordFrame.scale - 2) < 0.001 and FeelsLikeDB.scale == 1.06,
+	gauge.scale .. " " .. wordFrame.scale)
+settings.FEELSLIKE_SCALE.callback(nil, 0.3)
+check("the word alone stays readable at the smallest scale", wordFrame.scale == 0.75, wordFrame.scale)
+settings.FEELSLIKE_SCALE.callback(nil, 0.53)
+-- The word alone follows a new reading.
 local placeBefore = { world.mapID, world.zoneText, world.hour, world.weather }
 world.mapID, world.zoneText, world.hour, world.weather = 1429, "Elwynn Forest", 15, { type = 0, intensity = 0 }
 Tick(1)
-check("readings go on with the gauge hidden", ns.Model.Band(ns.Gauge.target, ns.Gauge.cozy).word == "Mild", ns.Gauge.target)
-check("the tooltip stays hidden after an update", gaugeTooltip.shown == false)
-check("debug says where the hidden gauge would be", Slash("debug"):find("position: default, off in settings; ", 1, true))
-settings.FEELSLIKE_GAUGE.callback(nil, true)
-check("back on, the needle shows the reading at once", gauge.scripts.OnUpdate == nil
-	and math.abs(ns.Gauge.display - ns.Gauge.target) < 3, ns.Gauge.display .. " " .. ns.Gauge.target)
+check("the word alone follows the reading", label.shown == true and label.text == "Mild", label.text)
+world.mapID, world.zoneText, world.hour, world.weather = unpack(placeBefore)
 Tick(1)
-check("back on in hover mode, no word and no tooltip until the mouse comes", gauge.shown == true and label.shown == false
-	and gaugeTooltip.shown == false)
+-- Its tooltip, owned by the word.
+statusFrame.scripts.OnEnter(statusFrame)
+check("hover the word alone for the tooltip", gaugeTooltip.shown == true and gaugeTooltip.owner == statusFrame
+	and gaugeTooltip.lines[1] == "Freezing", gaugeTooltip.lines[1])
+statusFrame.scripts.OnLeave(statusFrame)
+check("the tooltip goes when the mouse leaves the word", gaugeTooltip.shown == false and label.shown == true)
+FeelsLikeDB.locked = true
+ns.Gauge:SetLocked(true)
+check("locked, the word alone keeps the mouse for the tooltip", statusFrame.mouse == true)
+settings.FEELSLIKE_TOOLTIP.callback(nil, false)
+check("locked without the tooltip, clicks go through the word", statusFrame.mouse == false)
+settings.FEELSLIKE_TOOLTIP.callback(nil, true)
+world.shift = true
+gauge.moving = false
+statusFrame.scripts.OnMouseDown(statusFrame, "LeftButton")
+check("locked, the word does not move", not gauge.moving)
+FeelsLikeDB.locked = false
+ns.Gauge:SetLocked(false)
+-- Near the minimap the word sits on the far side, below it under the place.
+local realGaugeCenter, realLabelCenter = gauge.GetCenter, label.GetCenter
+gauge.GetCenter = function() return 500, 200 end
+ns.Gauge:ApplyPosition()
+check("the word alone below the minimap sits under the place", label.point[1] == "TOP", label.point[1])
+gauge.GetCenter = function() return 440, 300 end
+ns.Gauge:ApplyPosition()
+check("the word alone left of the minimap sits left of the place", label.point[1] == "RIGHT", label.point[1])
+-- Shift-drag the word far away: it stays where it was let go, not where its new side would put it.
+local gaugeAt = { 440, 300 }
+gauge.GetCenter = function() return gaugeAt[1], gaugeAt[2] end
+label.GetCenter = function(self)
+	if self.point[1] == "CENTER" then
+		return gaugeAt[1], gaugeAt[2]
+	end
+	return gaugeAt[1] - 40, gaugeAt[2]
+end
+statusFrame.scripts.OnMouseDown(statusFrame, "LeftButton")
+check("shift-press on the word moves the gauge frame", gauge.moving == true)
+gaugeAt = { 100, 900 }
+statusFrame.scripts.OnMouseUp(statusFrame, "LeftButton")
+check("far away the word alone takes the place", label.point[1] == "CENTER", label.point[1])
+check("the word stays where it was let go", math.abs(FeelsLikeDB.x - (100 * 0.53 - 500 - 40)) < 0.001
+	and math.abs(FeelsLikeDB.y - (900 * 0.53 - 300)) < 0.001, FeelsLikeDB.x .. " " .. FeelsLikeDB.y)
+-- Let go just outside the minimap: after the word is put back where it was let go, the place is near the minimap
+-- again, but the word keeps the side it has, or it would leave the mouse once more.
+ns.Gauge:ResetPosition()
+gaugeAt = { 560, 300 }
+gauge.GetCenter = function()
+	if FeelsLikeDB.x then
+		return (FeelsLikeDB.x + 500) / 0.53, (FeelsLikeDB.y + 300) / 0.53
+	end
+	return gaugeAt[1], gaugeAt[2]
+end
+-- The word follows the place, on its side.
+label.GetCenter = function(self)
+	local x, y = gauge:GetCenter()
+	local side = self.point[1]
+	if side == "CENTER" then
+		return x, y
+	elseif side == "LEFT" then
+		return x + 40, y
+	elseif side == "RIGHT" then
+		return x - 40, y
+	end
+	return x, y - 30
+end
+ns.Gauge:ApplyPosition()
+check("right of the minimap the word sits right of the place", label.point[1] == "LEFT", label.point[1])
+statusFrame.scripts.OnMouseDown(statusFrame, "LeftButton")
+-- A new reading during the move keeps the word on its side, under the mouse.
+gaugeAt = { 250, 300 }
+ns.Gauge:SetTarget(-60)
+check("the word keeps its side during a move", label.point[1] == "LEFT", label.point[1])
+statusFrame.scripts.OnMouseUp(statusFrame, "LeftButton")
+check("the word put back keeps its side", label.point[1] == "CENTER", label.point[1])
+gauge.GetCenter, label.GetCenter = realGaugeCenter, realLabelCenter
+gauge.moving = false
+world.shift = false
+ns.Gauge:ResetPosition()
+Tick(1)
+-- No needle to move while the dial is not drawn. Back on screen it shows the reading at once.
+check("the word alone runs no needle", gauge.scripts.OnUpdate == nil)
+ns.Gauge:SetTarget(40)
+check("a new reading runs no needle for the word alone", gauge.scripts.OnUpdate == nil)
+settings.FEELSLIKE_DISPLAY.callback(nil, "gauge")
+check("back to the gauge, the needle shows the reading at once", gauge.scripts.OnUpdate == nil
+	and math.abs(ns.Gauge.needle - 40) < 3, ns.Gauge.needle)
+-- A word that always shows next to the gauge takes the mouse too: hover it for the tooltip, and the player who
+-- moves it keeps it where it was let go.
+settings.FEELSLIKE_DISPLAY.callback(nil, "gaugeStatus")
+Tick(1)
+statusFrame.scripts.OnEnter(statusFrame)
+check("hover the word next to the gauge for the tooltip", gaugeTooltip.shown == true and gaugeTooltip.owner == statusFrame)
+statusFrame.scripts.OnLeave(statusFrame)
+gauge.scripts.OnEnter(gauge)
+check("hover the gauge for the tooltip", gaugeTooltip.shown == true and gaugeTooltip.owner == gauge)
+gauge.scripts.OnLeave(gauge)
+world.shift = true
+gaugeAt = { 440, 300 }
+gauge.GetCenter = function() return gaugeAt[1], gaugeAt[2] end
+label.GetCenter = function(self)
+	if self.point[1] == "TOP" then
+		return gaugeAt[1], gaugeAt[2] - 30
+	end
+	return gaugeAt[1] - 40, gaugeAt[2]
+end
+ns.Gauge:ApplyPosition()
+statusFrame.scripts.OnMouseDown(statusFrame, "LeftButton")
+gaugeAt = { 100, 900 }
+statusFrame.scripts.OnMouseUp(statusFrame, "LeftButton")
+check("the word next to the gauge stays where it was let go", label.point[1] == "TOP"
+	and math.abs(FeelsLikeDB.x - (100 * 0.53 - 500 - 40)) < 0.001 and math.abs(FeelsLikeDB.y - (900 * 0.53 - 300 + 30)) < 0.001,
+	FeelsLikeDB.x .. " " .. FeelsLikeDB.y)
+gauge.GetCenter, label.GetCenter = realGaugeCenter, realLabelCenter
+gauge.moving = false
+world.shift = false
+ns.Gauge:ResetPosition()
+settings.FEELSLIKE_DISPLAY.callback(nil, "status")
+-- A moved place and a scale that is not the default: a change of mode keeps the place.
+FeelsLikeDB.x, FeelsLikeDB.y = 120, 80
+settings.FEELSLIKE_SCALE.callback(nil, 1)
+check("status only places the empty gauge at its own scale", gauge.point[4] == 120 / 0.53 and gauge.point[5] == 80 / 0.53,
+	gauge.point[4])
+settings.FEELSLIKE_DISPLAY.callback(nil, "gaugeStatus")
+check("back to the gauge, the place stays", gauge.scale == 1 and gauge.point[4] == 120 and gauge.point[5] == 80
+	and wordFrame.scale == 1, gauge.point[4])
+settings.FEELSLIKE_DISPLAY.callback(nil, "status")
+check("and to status only again", gauge.point[4] == 120 / 0.53, gauge.point[4])
+settings.FEELSLIKE_SCALE.callback(nil, 0.53)
+ns.Gauge:ResetPosition()
+check("reset puts the word alone back by the minimap", FeelsLikeDB.x == nil and gauge.point[2] == _G.Minimap)
+
+-- A change of mode under the mouse: the game may not say that the mouse left, and the tooltip is filled each update.
+settings.FEELSLIKE_DISPLAY.callback(nil, "gaugeHover")
+gauge.scripts.OnEnter()
+check("tooltip on hover before the change", gaugeTooltip.shown == true)
+settings.FEELSLIKE_DISPLAY.callback(nil, "status")
+check("the tooltip goes with the change", gaugeTooltip.shown == false)
+Tick(1)
+check("and stays hidden after an update", gaugeTooltip.shown == false)
+settings.FEELSLIKE_DISPLAY.callback(nil, "gaugeHover")
+gauge.scripts.OnEnter()
+settings.FEELSLIKE_DISPLAY.callback(nil, "none")
+check("the tooltip goes with the gauge", gaugeTooltip.shown == false)
+world.mapID, world.zoneText, world.hour, world.weather = 1429, "Elwynn Forest", 15, { type = 0, intensity = 0 }
+Tick(1)
+check("readings go on with nothing on screen", ns.Model.Band(ns.Gauge.target, ns.Gauge.cozy).word == "Mild", ns.Gauge.target)
+check("the tooltip stays hidden after an update", gaugeTooltip.shown == false)
+settings.FEELSLIKE_DISPLAY.callback(nil, "gaugeHover")
+check("back on, the needle shows the reading at once", gauge.scripts.OnUpdate == nil
+	and math.abs(ns.Gauge.needle - ns.Gauge.target) < 3, ns.Gauge.needle .. " " .. ns.Gauge.target)
+Tick(1)
+check("back on in hover mode, no word and no tooltip until the mouse comes", Looks() == LOOKS.gaugeHover
+	and gaugeTooltip.shown == false, Looks())
 world.mapID, world.zoneText, world.hour, world.weather = unpack(placeBefore)
 Tick(1)
 check("back to the cold", label.shown == false and ns.Model.Band(ns.Gauge.target, ns.Gauge.cozy).word == "Freezing")
@@ -710,19 +882,17 @@ Press()
 check("locked does not move", not gauge.moving)
 world.shift = false
 check("mouse on while label shows on hover", gauge.mouse == true)
-FeelsLikeDB.label = "never"
-ns.Gauge:SetLabelMode("never")
+ns.Gauge:SetDisplay("gauge")
 check("locked with the tooltip on keeps the mouse for it", gauge.mouse == true)
 settings.FEELSLIKE_TOOLTIP.callback(nil, false)
 check("locked without label and tooltip lets clicks through", gauge.mouse == false)
-FeelsLikeDB.label = "always"
-ns.Gauge:SetLabelMode("always")
+ns.Gauge:SetDisplay("gaugeStatus")
 check("locked with the word always shown and no tooltip lets clicks through", gauge.mouse == false)
 settings.FEELSLIKE_TOOLTIP.callback(nil, true)
 check("the tooltip setting turns the mouse back on", gauge.mouse == true)
-FeelsLikeDB.locked, FeelsLikeDB.label = false, "hover"
+FeelsLikeDB.locked = false
 ns.Gauge:SetLocked(false)
-ns.Gauge:SetLabelMode("hover")
+ns.Gauge:SetDisplay("gaugeHover")
 check("mouse back on", gauge.mouse == true)
 
 -- A plain drag saves nothing.
@@ -798,14 +968,14 @@ world.mapID, world.zoneText, world.hour, world.weather = before[1], before[2], b
 
 -- Hover state does not stick when the mouse is off.
 gauge.scripts.OnEnter()
-FeelsLikeDB.locked, FeelsLikeDB.label = true, "never"
+FeelsLikeDB.locked = true
 settings.FEELSLIKE_TOOLTIP.callback(nil, false)
 ns.Gauge:SetLocked(true)
-ns.Gauge:SetLabelMode("never")
-FeelsLikeDB.locked, FeelsLikeDB.label = false, "hover"
+ns.Gauge:SetDisplay("gauge")
+FeelsLikeDB.locked = false
 settings.FEELSLIKE_TOOLTIP.callback(nil, true)
 ns.Gauge:SetLocked(false)
-ns.Gauge:SetLabelMode("hover")
+ns.Gauge:SetDisplay("gaugeHover")
 check("hover does not stick", label.shown == false)
 
 -- /feels auras lists buffs.
@@ -1719,7 +1889,7 @@ _G.Minimap.GetWidth = nil
 
 -- Old saved scale.
 ns = LoadAddon(true, { scale = 0.45, unit = "F" })
-check("old default scale moves to the new one", FeelsLikeDB.scale == 0.53 and FeelsLikeDB.version == 3, FeelsLikeDB.scale)
+check("old default scale moves to the new one", FeelsLikeDB.scale == 0.53 and FeelsLikeDB.version == 4, FeelsLikeDB.scale)
 check("other saved settings stay", FeelsLikeDB.unit == "F")
 ns = LoadAddon(true, { scale = 0.6 })
 check("a chosen scale stays", FeelsLikeDB.scale == 0.6, FeelsLikeDB.scale)
@@ -1727,6 +1897,25 @@ ns = LoadAddon(true, { scale = 0.45, version = 2 })
 check("0.45 chosen after the move stays", FeelsLikeDB.scale == 0.45, FeelsLikeDB.scale)
 ns = LoadAddon(false, { scale = 0.45 })
 check("retail keeps 0.45", FeelsLikeDB.scale == 0.45, FeelsLikeDB.scale)
+-- Before 0.4.0 Show status and, in 0.3.2, Show gauge chose what shows. One setting does now.
+local function DisplayAfterLoad(saved)
+	ns = LoadAddon(true, saved)
+	return FeelsLikeDB.display, FeelsLikeDB.label, FeelsLikeDB.gauge
+end
+check("an old save without a word setting gets the default", DisplayAfterLoad({ scale = 0.6 }) == "gaugeHover")
+check("show status on hover", DisplayAfterLoad({ label = "hover", version = 3 }) == "gaugeHover")
+check("show status always", DisplayAfterLoad({ label = "always", version = 2 }) == "gaugeStatus")
+check("show status never", DisplayAfterLoad({ label = "never" }) == "gauge")
+check("show gauge on keeps the word setting", DisplayAfterLoad({ label = "never", gauge = true, version = 3 }) == "gauge")
+check("show gauge off is nothing", DisplayAfterLoad({ label = "always", gauge = false, version = 3 }) == "none")
+local display, oldLabel, oldGauge = DisplayAfterLoad({ label = "always", gauge = false, version = 3 })
+check("the old settings are gone", oldLabel == nil and oldGauge == nil and FeelsLikeDB.version == 4)
+check("a choice that is gone gets the default", DisplayAfterLoad({ display = "klingon", version = 4 }) == "gaugeHover")
+check("a 0.4.0 choice stays", DisplayAfterLoad({ display = "status", version = 4 }) == "status")
+check("a 0.4.0 choice stays with old keys left by a downgrade",
+	DisplayAfterLoad({ display = "status", label = "never", gauge = true, version = 4 }) == "status")
+check("a status only save starts with the word alone", _G.FeelsLikeGauge.alpha == 0 and _G.FeelsLikeGauge.shown == true
+	and fontStrings.GameFontHighlightSmall.shown == true)
 check("old save gets the race setting", FeelsLikeDB.race == true, FeelsLikeDB.race)
 check("old save gets the undead setting", FeelsLikeDB.undead == "numb", FeelsLikeDB.undead)
 -- Always cold of 0.2.0 is gone: the saved choice goes back to numb, so the settings show a real choice.
@@ -1997,8 +2186,8 @@ CoreEvent("PLAYER_ENTERING_WORLD", false, false)
 check("the feed registers once", dataObjects["Feels Like"] == feed)
 _G.LibStub = nil
 
--- With the gauge off in the settings, the lines in chat and the panel feed stay.
-LoadQuietly({ gauge = false, label = "always" })
+-- Nothing on screen, from a 0.3.2 save with Show gauge off: the lines in chat and the panel feed stay.
+LoadQuietly({ gauge = false, label = "always", version = 3 })
 check("a saved hidden gauge is hidden from the start", _G.FeelsLikeGauge.shown == false
 	and fontStrings.GameFontHighlightSmall.shown == false)
 local hiddenObjects = {}
@@ -2015,7 +2204,7 @@ check("a hidden gauge keeps the panel feed", hiddenObjects["Feels Like"] and hid
 check("the word stays hidden", fontStrings.GameFontHighlightSmall.shown == false)
 
 -- Ukrainian: the word, the tooltip, the lines in chat, the hints and the settings.
-ns, settings = LoadAddon(true, { language = "uk", label = "always" })
+ns, settings = LoadAddon(true, { language = "uk", display = "gaugeStatus", version = 4 })
 check("language setting registered", settings.FEELSLIKE_LANGUAGE ~= nil and settings.FEELSLIKE_SEASONS ~= nil)
 Tick(10)
 check("ukrainian word next to the gauge", fontStrings.GameFontHighlightSmall.text == "Морозно", fontStrings.GameFontHighlightSmall.text)
@@ -2064,13 +2253,13 @@ settings.FEELSLIKE_LANGUAGE.callback(nil, "uk")
 check("ukrainian word at once", fontStrings.GameFontHighlightSmall.text == "Морозно", fontStrings.GameFontHighlightSmall.text)
 check("back to the language of the page: no window", reloadWindow.shown == false)
 -- From an English page to Ukrainian the window speaks Ukrainian.
-ns, settings = LoadAddon(true, { label = "always" })
+ns, settings = LoadAddon(true, { display = "gaugeStatus", version = 4 })
 settings.FEELSLIKE_LANGUAGE.callback(nil, "uk")
 reloadWindow = _G.FeelsLikeReloadWindow
 check("the window speaks the new language", reloadWindow.shown == true and reloadWindow.reload.text == "Перезавантажити"
 	and reloadWindow.later.text == "Пізніше" and reloadWindow.text.text:find("мову змінено", 1, true) ~= nil,
 	reloadWindow.text.text)
-ns, settings = LoadAddon(true, { language = "uk", label = "always" })
+ns, settings = LoadAddon(true, { language = "uk", display = "gaugeStatus", version = 4 })
 Tick(10)
 -- The panel feed speaks Ukrainian too.
 local ukObjects = {}
@@ -2092,7 +2281,7 @@ check("an unknown saved language is english", FeelsLikeDB.language == "en", Feel
 
 -- A German game: German with no choice saved, and a choice stays.
 clientLocale = "deDE"
-ns = LoadAddon(true, { label = "always" })
+ns = LoadAddon(true, { display = "gaugeStatus", version = 4 })
 check("a german game starts in german", FeelsLikeDB.language == "de", FeelsLikeDB.language)
 Tick(10)
 check("german word next to the gauge", fontStrings.GameFontHighlightSmall.text == "Eisig", fontStrings.GameFontHighlightSmall.text)
@@ -2110,7 +2299,7 @@ ns = LoadAddon(true, { language = "klingon" })
 check("an unknown saved language follows the game", FeelsLikeDB.language == "de", FeelsLikeDB.language)
 -- A French game. French puts a space before the colon.
 clientLocale = "frFR"
-ns = LoadAddon(true, { label = "always" })
+ns = LoadAddon(true, { display = "gaugeStatus", version = 4 })
 check("a french game starts in french", FeelsLikeDB.language == "fr", FeelsLikeDB.language)
 Tick(10)
 _G.FeelsLikeGauge.scripts.OnEnter()
@@ -2119,7 +2308,7 @@ check("french tooltip", table.concat(Tip().lines, " | ")
 _G.FeelsLikeGauge.scripts.OnLeave()
 -- Spain and Latin America share the Spanish text.
 clientLocale = "esMX"
-ns = LoadAddon(true, { label = "always" })
+ns = LoadAddon(true, { display = "gaugeStatus", version = 4 })
 check("a latin american game starts in spanish", FeelsLikeDB.language == "es", FeelsLikeDB.language)
 Tick(10)
 _G.FeelsLikeGauge.scripts.OnEnter()
@@ -2127,7 +2316,7 @@ check("spanish tooltip", table.concat(Tip().lines, " | ")
 	== "Gélido | Motivo: |cff8fd9f0un lugar frío, la nieve, la noche|r | Mayús + arrastrar para mover", table.concat(Tip().lines, " | "))
 _G.FeelsLikeGauge.scripts.OnLeave()
 clientLocale = "ptBR"
-ns = LoadAddon(true, { label = "always" })
+ns = LoadAddon(true, { display = "gaugeStatus", version = 4 })
 check("a brazilian game starts in portuguese", FeelsLikeDB.language == "pt", FeelsLikeDB.language)
 Tick(10)
 _G.FeelsLikeGauge.scripts.OnEnter()
