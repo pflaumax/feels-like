@@ -85,6 +85,7 @@ The gauge sits by the minimap. Hold Shift and drag it to move it anywhere you li
 
 Open Options, then AddOns, then Feels Like. You can
 
+- hide the gauge and keep only the lines in chat (and the status in a panel like Titan Panel)
 - switch between Celsius and Fahrenheit
 - show the status word on hover, always or never
 - turn the tooltip on hover on or off

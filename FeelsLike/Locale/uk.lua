@@ -60,6 +60,9 @@ ns.Locale.Add("uk", "Українська", {
 	["type /reload to change the settings page too."] = "введи /reload, щоб також змінити сторінку налаштувань.",
 
 	-- Settings.
+	["Show gauge"] = "Показувати датчик",
+	["Off: the gauge and its status word leave the screen. The lines in chat stay, and so does the status in panels like Titan Panel. Type /feels to open the settings again."] =
+		"Вимкнено: датчик і статус зникають з екрана. Репліки в чаті лишаються, як і статус на панелях на кшталт Titan Panel. Щоб знову відкрити налаштування, введи /feels.",
 	["Units"] = "Одиниці",
 	["Celsius"] = "Цельсій",
 	["Fahrenheit"] = "Фаренгейт",

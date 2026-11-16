@@ -57,6 +57,14 @@ function Options:Register(db)
 	local defaults = ns.DEFAULTS
 	local category, layout = Settings.RegisterVerticalLayoutCategory("Feels Like")
 
+	local gauge = Settings.RegisterAddOnSetting(category, "FEELSLIKE_GAUGE", "gauge", db,
+		Settings.VarType.Boolean, T("Show gauge"), defaults.gauge)
+	gauge:SetValueChangedCallback(function(_, value)
+		ns.Gauge:SetShown(value)
+	end)
+	Settings.CreateCheckbox(category, gauge,
+		T("Off: the gauge and its status word leave the screen. The lines in chat stay, and so does the status in panels like Titan Panel. Type /feels to open the settings again."))
+
 	local unit = Settings.RegisterAddOnSetting(category, "FEELSLIKE_UNIT", "unit", db,
 		Settings.VarType.String, T("Units"), defaults.unit)
 	unit:SetValueChangedCallback(function(_, value)

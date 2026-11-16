@@ -3,6 +3,7 @@
 local addonName, ns = ...
 
 ns.DEFAULTS = {
+	gauge = true,
 	unit = "C",
 	label = "hover",
 	tooltip = true,

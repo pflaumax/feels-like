@@ -102,7 +102,7 @@ local function PlaceLabel()
 end
 
 local function UpdateLabel()
-	local visible = db.label == "always" or (db.label == "hover" and hovered)
+	local visible = db.gauge and (db.label == "always" or (db.label == "hover" and hovered))
 	if not visible then
 		label:Hide()
 		return
@@ -320,6 +320,7 @@ function Gauge:Create(savedVariables)
 	self:SetScale(db.scale)
 	self:SetLabelMode(db.label)
 	self:SetLocked(db.locked)
+	self:SetShown(db.gauge)
 	dial:Render(self.display)
 end
 
@@ -379,6 +380,27 @@ function Gauge:SetLabelMode(mode)
 	UpdateMouse()
 end
 
+-- The gauge can leave the screen with its word. The readings, the lines in chat and the panel feed go on.
+function Gauge:SetShown(on)
+	db.gauge = on
+	local cameBack = on and not frame:IsShown()
+	if not on then
+		-- The game may not say the mouse left a frame that hides, and the tooltip is filled again each update.
+		hovered = false
+		tooltip:Hide()
+	end
+	frame:SetShown(on)
+	if cameBack then
+		self:ApplyPosition() -- the minimap may have moved
+		-- A hidden needle stands still. Back on screen it shows the reading at once, with no swing across the dial.
+		Gauge.display, velocity = dial:Rest(Gauge.target), 0
+		glow, glowFrom = Gauge.target, Gauge.target
+		frame:SetScript("OnUpdate", nil)
+		dial:Render(Gauge.display, glow)
+	end
+	UpdateLabel()
+end
+
 function Gauge:SetLocked(locked)
 	db.locked = locked
 	UpdateMouse()
@@ -430,7 +452,9 @@ end
 -- Where the gauge is, for /feels debug.
 function Gauge:DescribePosition()
 	local layout = IsClassicMinimap() and ", classic-style minimap" or ""
-	return (db.x and "moved" or "default") .. layout .. "; " .. self:Describe(frame)
+	-- The game may not place a frame that was never shown.
+	local off = db.gauge and "" or ", off in settings"
+	return (db.x and "moved" or "default") .. layout .. off .. "; " .. self:Describe(frame)
 end
 
 local function FrameName(target)
@@ -476,7 +500,8 @@ function Gauge:DescribeFrames()
 	local parent = frame:GetParent()
 	local held = (moving and ", moving with the mouse" or "") .. (frame:IsDragging() and ", dragged" or "")
 	local lines = {
-		string.format("frame: %s, alpha %.2f, scale %.2f, parent %s, %s level %d, mouse %s%s", DescribeRegion(frame),
+		string.format("frame: %s%s, alpha %.2f, scale %.2f, parent %s, %s level %d, mouse %s%s",
+			db.gauge and "" or "off in settings, ", DescribeRegion(frame),
 			frame:GetEffectiveAlpha(), frame:GetScale(), parent and FrameName(parent) or "none",
 			frame:GetFrameStrata(), frame:GetFrameLevel(), frame:IsMouseEnabled() and "on" or "off", held),
 		string.format("label: %s, alpha %.2f", DescribeRegion(label), label:GetAlpha()),

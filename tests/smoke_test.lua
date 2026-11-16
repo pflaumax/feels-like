@@ -35,6 +35,7 @@ local function Widget()
 	widget.SetPoint = function(self, ...) self.point = { ... } end
 	widget.Show = function(self) self.shown = true end
 	widget.Hide = function(self) self.shown = false end
+	widget.SetShown = function(self, shown) self.shown = not not shown end
 	-- rawget: a field that is not there reads as a function, see the end of Widget.
 	widget.IsShown = function(self) return self.shown end
 	widget.IsVisible = function(self) return self.shown and not rawget(self, "parentHidden") end
@@ -632,6 +633,38 @@ settings.FEELSLIKE_LABEL.callback(nil, "always")
 check("label always", label.shown == true)
 settings.FEELSLIKE_LABEL.callback(nil, "hover")
 check("label back to hover", label.shown == false and FeelsLikeDB.label == "hover")
+
+-- Show gauge: off takes the gauge and its word off the screen, on brings them back.
+check("gauge shown by default", FeelsLikeDB.gauge == true and settings.FEELSLIKE_GAUGE ~= nil and gauge.shown == true)
+settings.FEELSLIKE_LABEL.callback(nil, "always")
+settings.FEELSLIKE_GAUGE.callback(nil, false)
+check("gauge off hides the gauge and its word", gauge.shown == false and label.shown == false and FeelsLikeDB.gauge == false)
+check("debug says the gauge is off in the settings", Slash("debug"):find("frame: off in settings, hidden,", 1, true))
+settings.FEELSLIKE_GAUGE.callback(nil, true)
+check("gauge on shows the word again", gauge.shown == true and label.shown == true and label.text == "Freezing", label.text)
+check("debug says nothing of the setting with the gauge on", not Slash("debug"):find("off in settings", 1, true))
+-- Hidden under the mouse: the game may not say that the mouse left, and the tooltip is filled each update.
+settings.FEELSLIKE_LABEL.callback(nil, "hover")
+local gaugeTooltip = _G.FeelsLikeTooltip
+gauge.scripts.OnEnter()
+check("tooltip on hover before the gauge hides", gaugeTooltip.shown == true)
+settings.FEELSLIKE_GAUGE.callback(nil, false)
+check("the tooltip goes with the gauge", gaugeTooltip.shown == false)
+local placeBefore = { world.mapID, world.zoneText, world.hour, world.weather }
+world.mapID, world.zoneText, world.hour, world.weather = 1429, "Elwynn Forest", 15, { type = 0, intensity = 0 }
+Tick(1)
+check("readings go on with the gauge hidden", ns.Model.Band(ns.Gauge.target, ns.Gauge.cozy).word == "Mild", ns.Gauge.target)
+check("the tooltip stays hidden after an update", gaugeTooltip.shown == false)
+check("debug says where the hidden gauge would be", Slash("debug"):find("position: default, off in settings; ", 1, true))
+settings.FEELSLIKE_GAUGE.callback(nil, true)
+check("back on, the needle shows the reading at once", gauge.scripts.OnUpdate == nil
+	and math.abs(ns.Gauge.display - ns.Gauge.target) < 3, ns.Gauge.display .. " " .. ns.Gauge.target)
+Tick(1)
+check("back on in hover mode, no word and no tooltip until the mouse comes", gauge.shown == true and label.shown == false
+	and gaugeTooltip.shown == false)
+world.mapID, world.zoneText, world.hour, world.weather = unpack(placeBefore)
+Tick(1)
+check("back to the cold", label.shown == false and ns.Model.Band(ns.Gauge.target, ns.Gauge.cozy).word == "Freezing")
 
 -- Moving needs Shift and an unlocked gauge.
 -- The move starts at the press, not after the drag threshold.
@@ -1963,6 +1996,23 @@ check("a click on the panel feed opens the settings", settings.opened == 7, sett
 CoreEvent("PLAYER_ENTERING_WORLD", false, false)
 check("the feed registers once", dataObjects["Feels Like"] == feed)
 _G.LibStub = nil
+
+-- With the gauge off in the settings, the lines in chat and the panel feed stay.
+LoadQuietly({ gauge = false, label = "always" })
+check("a saved hidden gauge is hidden from the start", _G.FeelsLikeGauge.shown == false
+	and fontStrings.GameFontHighlightSmall.shown == false)
+local hiddenObjects = {}
+_G.LibStub = { GetLibrary = function() return { NewDataObject = function(_, name, object) hiddenObjects[name] = object return object end } end }
+ns.Broker.Register(function() end)
+_G.LibStub = nil
+GoMild()
+Tick(1)
+GoFreezing()
+Tick(4)
+check("a hidden gauge keeps the lines in chat", #chatLines == 1 and LastLine() == "You shiver from the cold. (/shiver)", LastLine())
+check("a hidden gauge keeps the panel feed", hiddenObjects["Feels Like"] and hiddenObjects["Feels Like"].text == "|cff6e9bffFreezing|r",
+	hiddenObjects["Feels Like"] and hiddenObjects["Feels Like"].text)
+check("the word stays hidden", fontStrings.GameFontHighlightSmall.shown == false)
 
 -- Ukrainian: the word, the tooltip, the lines in chat, the hints and the settings.
 ns, settings = LoadAddon(true, { language = "uk", label = "always" })

@@ -61,6 +61,9 @@ ns.Locale.Add("fr", "Français", {
 	["type /reload to change the settings page too."] = "tapez /reload pour changer aussi la page des options.",
 
 	-- Settings.
+	["Show gauge"] = "Afficher le thermomètre",
+	["Off: the gauge and its status word leave the screen. The lines in chat stay, and so does the status in panels like Titan Panel. Type /feels to open the settings again."] =
+		"Désactivé : le thermomètre et son mot d’état disparaissent de l’écran. Les phrases d’ambiance restent, tout comme l’état dans les barres telles que Titan Panel. Tapez /feels pour rouvrir les options.",
 	["Units"] = "Unités",
 	["Celsius"] = "Celsius",
 	["Fahrenheit"] = "Fahrenheit",
