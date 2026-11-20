@@ -1,0 +1,26 @@
+schema: spec-driven
+
+context: |
+  Feels Like: a World of Warcraft addon in Lua, a roleplay thermometer by the minimap. It never changes gameplay.
+  Main target is WoW Forever (TOC 16001). Retail (120100, 120105) must keep working.
+  Addon code is in FeelsLike/. The release zip ships only that folder.
+  English text is the key. Every new player-facing text needs entries in FeelsLike/Locale/{uk,de,fr,es,pt}.lua (see TRANSLATING.md).
+  Tests: luajit tests/model_test.lua && luajit tests/smoke_test.lua. Full check and zip: sh tools/package.sh.
+  Taint: never show, hide or hook GameTooltip or StaticPopup, and never add frames to UISpecialFrames. The addon has its own tooltip and windows.
+  docs/ is local only (gitignored). docs/IDEAS.md is the idea list. docs/PLAN.md, HANDOFF.md and TASK-*.md are history. New work goes in openspec/changes/.
+  Write artifacts, code, comments and commits in plain English.
+
+rules:
+  specs:
+    - "Describe what the player sees: gauge, status word, tooltip, chat lines, settings, slash commands."
+  tasks:
+    - Each code task names the test that covers it (model_test or smoke_test).
+    - When player-visible behavior changes, include tasks for the locale files, README.md and docs/CHANGELOG.md.
+    - Do not bump the version in FeelsLike.toc. A release is its own commit.
+    - End with a manual in-game check for Forever and Retail.
+
+operations:
+  apply:
+    guidance:
+      - Run both luajit tests before checking off a code task.
+      - Do not commit or push unless asked.
